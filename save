@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Saves your work to GitHub.  Usage:  ./save "what I changed"
+cd "$(dirname "$0")" || exit 1
+
+if [ -z "$1" ]; then
+  echo 'Please say what you changed, like this:  ./save "made the jump higher"'
+  exit 1
+fi
+
+git add -A && git commit -m "$1" && git push

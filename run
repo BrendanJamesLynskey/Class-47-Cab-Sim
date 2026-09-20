@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Starts the cab simulator. Leave this running, then open the address it prints
+# (the "Network" one) in the browser on the Pi. Press Ctrl+C to stop.
+cd "$(dirname "$0")" || exit 1
+
+# First time only: download the game engine.
+if [ ! -d node_modules ]; then
+  npm install
+fi
+
+npm run dev -- --host
