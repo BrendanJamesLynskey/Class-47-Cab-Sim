@@ -1,191 +1,162 @@
-// cab.js — the inside of the locomotive's cab, built from simple boxes: the cream
-// walls, the windscreen frame, the dark desk and everything on it.
+// cab.js — the inside of the locomotive's cab, modelled on a real Class 47: cream walls
+// with blue panels low down, a windscreen with a sun blind over each half, a side window
+// and a door on each side, and the driver's desk with its gauge board and levers.
 //
-// The cab is one group of shapes. main.js puts it on the track and the camera inside
-// it. Every frame, update() moves the needles and levers to match the train.
+// The cab is one group of shapes. main.js puts it on the track and the camera inside it.
+// Every frame, update() moves the needles and levers to match the train.
 //
-// Measurements are in metres. The origin is on the rail, directly under the driver's
-// eyes. +X is to the right, +Y is up, and the train faces -Z (into the screen).
+// The two big handles (the train brake and the power controller) swing round on the desk
+// like the real ones: you PULL them BACK toward you in a curve to apply brake or power.
+//
+// Measurements are in metres. See cab-layout.js for where everything is.
 
 import * as THREE from "three";
 import * as C from "./config.js";
-import { makeDial, setDial, makeLever, makeLamp, setLamp, makeLabel } from "./cab-parts.js";
+import { MeshBuilder, colour, BLOB, CYLINDER } from "./world/mesh-builder.js";
+import { buildCabShell, shellMaterial } from "./cab-shell.js";
+import { paintGaugeBoard, paintDeskTop, BOARD_WIDTH_M, DIAL_SPECS } from "./cab-panels.js";
+import { makeNeedle, setNeedle, makeLamp, setLamp, makeSlopedPanel } from "./cab-parts.js";
+import * as L from "./cab-layout.js";
+import { PRESET } from "./world/sky.js";
 
-export const EYE_POSITION = new THREE.Vector3(-0.45, 2.75, 0); // the driver sits on the left
+export { EYE_POSITION } from "./cab-layout.js";
 
-const lambertCache = new Map();
-const lambert = (hex) => {
-  if (!lambertCache.has(hex)) lambertCache.set(hex, new THREE.MeshLambertMaterial({ color: hex }));
-  return lambertCache.get(hex);
-};
+const degrees = (d) => (d * Math.PI) / 180;
 
-// A box from (x0, y0, z0) to (x1, y1, z1), added to `parent`.
-function box(parent, x0, y0, z0, x1, y1, z1, hex) {
-  const mesh = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, y1 - y0, z1 - z0), lambert(hex));
-  mesh.position.set((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
-  parent.add(mesh);
-  return mesh;
+// How far each handle swings. The angle is measured round the handle's pivot, from "pointing
+// straight ahead", so bigger angles pull the handle round and back toward the driver.
+const BRAKE_ARC = { released: degrees(22), full: degrees(150) };   // swings out to the LEFT then back
+const POWER_ARC = { off: degrees(-20), full: degrees(-132) };      // swings out to the RIGHT then back
+
+// A lever arm: a metal bar with a black ball on the end, pivoting at its base, pointing
+// along -Z (forward) and rising a little. Turn it with rotation.y to swing it round.
+function makeHandle(length_m, knobRadius_m) {
+  const B = new MeshBuilder();
+  const lift = 0.2;
+  const dy = Math.sin(lift) * length_m, dz = -Math.cos(lift) * length_m;
+  B.addShape(CYLINDER, 0, 0.012, 0, 0.055, 0.03, 0.055, 0, 0, colour("#5c6166"));
+  B.addBox(0, 0.03 + dy / 2, dz / 2, 0.022, 0.022, length_m, 0, colour("#aeb3b9"), 1, lift);
+  B.addShape(BLOB, 0, 0.03 + dy, dz, knobRadius_m, knobRadius_m * 0.95, knobRadius_m, 0.3, 0, colour("#17181a"));
+  B.addBox(0, 0.03 + dy * 0.62, dz * 0.62, 0.04, 0.03, 0.03, 0, colour("#d8b024"), 1, lift); // a coloured grip band so you can tell them apart
+  return new THREE.Mesh(B.build(), new THREE.MeshLambertMaterial({ vertexColors: true }));
 }
 
-// Where the desk's top surface starts (near the driver) and ends (far, by the windscreen).
-const DESK_NEAR = { z: -0.5, y: 2.3 };
-const DESK_FAR = { z: -0.95, y: 2.55 };
-const DESK_TILT = Math.atan2(DESK_FAR.y - DESK_NEAR.y, DESK_NEAR.z - DESK_FAR.z);
-const DESK_LENGTH = Math.hypot(DESK_FAR.y - DESK_NEAR.y, DESK_NEAR.z - DESK_FAR.z);
-
-// A point on the desk's surface: x across, `along` metres from its middle toward the windscreen.
-function deskPoint(x, along) {
-  return new THREE.Vector3(
-    x,
-    (DESK_NEAR.y + DESK_FAR.y) / 2 + along * Math.sin(DESK_TILT),
-    (DESK_NEAR.z + DESK_FAR.z) / 2 - along * Math.cos(DESK_TILT)
-  );
+// A short upright lever with a ball on top (the reverser and the horn lever).
+function makeStick(length_m, knobRadius_m, knobColor) {
+  const B = new MeshBuilder();
+  B.addBox(0, length_m / 2, 0, 0.016, length_m, 0.016, 0, colour("#aeb3b9"));
+  B.addShape(BLOB, 0, length_m + knobRadius_m * 0.5, 0, knobRadius_m, knobRadius_m, knobRadius_m, 0.2, 0, colour(knobColor));
+  return new THREE.Mesh(B.build(), new THREE.MeshLambertMaterial({ vertexColors: true }));
 }
 
-// The dash: everything under the desk and in front of the driver, as one solid shape.
-function buildDash(cab) {
-  const shape = new THREE.Shape();
-  // Drawn side-on: x is "how far forward" (-z), y is height.
-  shape.moveTo(-DESK_NEAR.z, 1.5);
-  shape.lineTo(1.3, 1.5);
-  shape.lineTo(1.3, DESK_FAR.y + 0.02);
-  shape.lineTo(-DESK_FAR.z, DESK_FAR.y);
-  shape.lineTo(-DESK_NEAR.z, DESK_NEAR.y);
-  const geometry = new THREE.ExtrudeGeometry(shape, { depth: 2.6, bevelEnabled: false });
-  geometry.translate(0, 0, -1.3);
-  geometry.rotateY(Math.PI / 2); // extrude along X, and shape-x becomes -Z
-  cab.add(new THREE.Mesh(geometry, lambert(C.CAB_DESK_COLOR)));
-}
-
-function buildShell(cab) {
-  const cream = C.CAB_SHELL_COLOR, dark = C.CAB_FRAME_COLOR;
-  box(cab, -1.3, 1.45, -1.3, 1.3, 1.55, 1.7, C.CAB_FLOOR_COLOR);   // floor
-  box(cab, -1.4, 3.7, -1.35, 1.4, 3.8, 1.75, cream);               // roof
-  box(cab, -1.3, 1.55, 1.6, 1.3, 3.7, 1.7, cream);                 // back wall
-
-  // Right wall, plain.
-  box(cab, 1.3, 1.55, -1.3, 1.4, 3.7, 1.7, cream);
-  // Left wall, with a side window (the opening is z -0.7 to 0.3, height 2.4 to 3.2).
-  box(cab, -1.4, 1.55, -1.3, -1.3, 3.7, -0.7, cream);
-  box(cab, -1.4, 1.55, 0.3, -1.3, 3.7, 1.7, cream);
-  box(cab, -1.4, 1.55, -0.7, -1.3, 2.4, 0.3, cream);
-  box(cab, -1.4, 3.2, -0.7, -1.3, 3.7, 0.3, cream);
-  // Its frame.
-  box(cab, -1.33, 2.37, -0.73, -1.28, 2.43, 0.33, dark);
-  box(cab, -1.33, 3.17, -0.73, -1.28, 3.23, 0.33, dark);
-  box(cab, -1.33, 2.4, -0.73, -1.28, 3.2, -0.67, dark);
-  box(cab, -1.33, 2.4, 0.27, -1.28, 3.2, 0.33, dark);
-
-  // Above the windscreen, a roof lip, a sun visor over the driver's half and a lamp.
-  box(cab, -1.4, 3.5, -1.35, 1.4, 3.75, -1.15, cream);
-  box(cab, -1.25, 3.36, -1.15, 0.1, 3.5, -0.98, "#33363a");
-  box(cab, -0.1, 3.66, 0.1, 0.1, 3.7, 0.3, "#fff4c8");
-  // The windscreen frame: two side pillars and a centre pillar (the glass is simply not drawn).
-  box(cab, -1.3, 2.5, -1.22, -1.22, 3.52, -1.14, dark);
-  box(cab, 1.22, 2.5, -1.22, 1.3, 3.52, -1.14, dark);
-  box(cab, 0.14, 2.5, -1.22, 0.23, 3.52, -1.14, dark);
-}
-
-// The front of the locomotive, just visible beyond the windscreen, with its two headlamps.
-function buildNose(cab) {
-  box(cab, -0.95, 2.0, -2.5, 0.95, 2.52, -1.15, C.LOCO_COLOR);
-  box(cab, -0.95, 2.4, -2.52, 0.95, 2.55, -2.35, "#e2c531"); // a yellow warning panel at the very front
-  const lamps = [-0.6, 0.6].map((x) => {
-    const lamp = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.05, 0.05), new THREE.MeshBasicMaterial({ color: "#555555" }));
-    lamp.position.set(x, 2.58, -2.3);
-    cab.add(lamp);
-    return lamp;
-  });
-  return lamps;
-}
-
-function buildWipers(cab) {
-  const wipers = [-0.8, 0.55].map((x) => {
-    const pivot = new THREE.Group();
-    pivot.position.set(x, 2.545, -1.1); // just below the sill, so parked wipers are hidden
-    const arm = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.014, 0.01), lambert("#101010"));
-    arm.position.x = 0.31; // hangs off the pivot toward the right
-    pivot.add(arm);
-    cab.add(pivot);
-    return pivot;
-  });
-  return wipers;
-}
+const at = (object, x, y, z) => { object.position.set(x, y, z); return object; };
 
 export function createCab() {
   const cab = new THREE.Group();
-  buildShell(cab);
-  buildDash(cab);
-  const headlamps = buildNose(cab);
-  const wipers = buildWipers(cab);
 
-  // ---- The desk: instruments are laid out on a panel lying on the desk's surface ----
-  const panel = new THREE.Group();
-  panel.position.copy(deskPoint(0, 0));
-  panel.rotation.x = -Math.PI / 2 + DESK_TILT; // so its Z axis points up out of the desk toward the driver
-  cab.add(panel);
-  const place = (object, x, along, z = 0) => { object.position.set(x, along, z); panel.add(object); return object; };
+  // ---- The parts that never move ----
+  cab.add(new THREE.Mesh(buildCabShell(), shellMaterial(PRESET.cabGlow)));
 
-  // What you can see of the desk from the driver's seat is only about 0.8 m either side
-  // of his eyes (x = -0.45), so everything is packed into that.
-  const speedometer = place(makeDial({ radius_m: 0.11, title: "SPEED", unit: "MPH", min: 0, max: 100, majorStep: 10, minorStep: 5, redFrom: 90 }), -0.45, 0.14);
-  const brakePipe = place(makeDial({ radius_m: 0.05, title: "PIPE", unit: "PSI", min: 0, max: 100, majorStep: 20, minorStep: 10 }), -0.83, 0.18);
-  const brakeCylinder = place(makeDial({ radius_m: 0.05, title: "CYL", unit: "PSI", min: 0, max: 100, majorStep: 20, minorStep: 10 }), -0.71, 0.18);
-  const ammeter = place(makeDial({ radius_m: 0.06, title: "AMPS", unit: "x100", min: 0, max: 10, majorStep: 2, minorStep: 1 }), -0.2, 0.18);
+  // The desk top (painted plates and labels) and the gauge board, each lying on its slope.
+  const deskTop = makeSlopedPanel(L.DESK_NEAR, L.DESK_FAR, BOARD_WIDTH_M, paintDeskTop());
+  deskTop.position.y += 0.002; deskTop.position.z += 0.001;
+  cab.add(deskTop);
+  const board = makeSlopedPanel(L.BOARD_BOTTOM, L.BOARD_TOP, BOARD_WIDTH_M, paintGaugeBoard());
+  board.translateZ(0.002);
+  cab.add(board);
 
-  // The warning lamps, in a row at the far left.
-  const powerCutLamp = place(makeLamp(0.022, "#ffb020"), -1.15, 0.27);
-  const brakeLamp = place(makeLamp(0.022, "#ff3030"), -1.05, 0.27);
-  const hornLamp = place(makeLamp(0.022, "#5ad0ff"), -0.95, 0.27);
-  place(makeLabel("POWER CUT", 0.095, 0.024), -1.15, 0.235);
-  place(makeLabel("BRAKES", 0.095, 0.024), -1.05, 0.235);
-  place(makeLabel("HORN", 0.095, 0.024), -0.95, 0.235);
-
-  // ---- The levers stand upright on the desk (not tilted with it) ----
-  const leverAt = (x, along, knobColor, label) => {
-    const holder = new THREE.Group();
-    holder.position.copy(deskPoint(x, along));
-    const base = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.045, 0.02, 14), lambert("#1a1c1e"));
-    base.position.y = 0.01;
-    const lever = makeLever(knobColor);
-    holder.add(base, lever);
-    cab.add(holder);
-    place(makeLabel(label, 0.16, 0.03), x, along - 0.06);
-    return lever;
-  };
-  const brakeLever = leverAt(-1.02, -0.07, "#d22a2a", "BRAKE");
-  const powerLever = leverAt(-0.05, -0.05, "#e8e8e8", "POWER");
-  const reverserLever = leverAt(0.13, -0.05, "#e8c22a", "R  N  F");
-
-  // ---- Every frame: make the instruments say what the train is doing ----
-  let wiperPhase = 0, wiperAngle = 0, reverserShown = 0;
-
-  function update(view, dt) {
-    setDial(speedometer, view.speed_mph);
-    setDial(brakePipe, view.brakePipe_psi);
-    setDial(brakeCylinder, view.brakeCylinder_psi);
-    setDial(ammeter, view.tractionFraction * 10);
-
-    // The levers tilt as they move: power forward = pushed away from you.
-    powerLever.rotation.x = 0.5 - view.throttle * 1.0;
-    brakeLever.rotation.x = -0.5 + view.brakeHandle * 1.0;
-    reverserShown += (view.reverser - reverserShown) * Math.min(1, dt * 12);
-    reverserLever.rotation.x = -0.5 * reverserShown;
-
-    setLamp(powerCutLamp, view.powerCut);
-    setLamp(brakeLamp, view.brakeCylinder_psi > 4);
-    setLamp(hornLamp, view.horn);
-
-    // Wipers sweep up and back while on, and settle flat when off.
-    if (view.wipers) wiperPhase += dt * 2.2;
-    const target = view.wipers ? 0.5 - 0.5 * Math.cos(wiperPhase * Math.PI * 2) : 0;
-    wiperAngle += (target * 1.7 - wiperAngle) * Math.min(1, dt * 14);
-    for (const wiper of wipers) wiper.rotation.z = wiperAngle;
-
-    // Headlamps: 0 = off, 1 = dipped, 2 = full beam.
-    const glow = ["#555555", "#ffe9a0", "#ffffff"][view.headlights];
-    for (const lamp of headlamps) lamp.material.color.set(glow);
+  // ---- Needles and lamps, on the board (local x is across the cab, y is up the board) ----
+  const needles = {};
+  for (const name of Object.keys(DIAL_SPECS)) {
+    needles[name] = makeNeedle(L.GAUGES[name].r);
+    at(needles[name], L.GAUGES[name].x, 0, 0);
+    board.add(needles[name]);
+  }
+  const lamps = {};
+  for (const lamp of L.LAMPS) {
+    lamps[lamp.name] = at(makeLamp(0.017, lamp.color), lamp.x, L.LAMP_Y, 0.003);
+    board.add(lamps[lamp.name]);
   }
 
-  return { group: cab, update };
+  // ---- Levers ----
+  const brakeHandle = makeHandle(0.19, 0.03);
+  at(brakeHandle, L.BRAKE_VALVE.x, L.deskHeightAt(L.BRAKE_VALVE.z) + 0.118, L.BRAKE_VALVE.z);
+  const powerHandle = makeHandle(0.22, 0.032);
+  at(powerHandle, L.POWER_CONTROLLER.x, L.deskHeightAt(-0.5) + 0.107, L.POWER_CONTROLLER.z);
+  const reverser = makeStick(0.085, 0.02, "#e8c22a");
+  at(reverser, L.REVERSER.x, L.deskHeightAt(-0.56) + 0.07, L.REVERSER.z);
+  const hornLever = makeStick(0.12, 0.024, "#17181a");
+  at(hornLever, L.HORN_LEVER.x, L.deskHeightAt(L.HORN_LEVER.z) + 0.06, L.HORN_LEVER.z);
+  cab.add(brakeHandle, powerHandle, reverser, hornLever);
+
+  // ---- Windscreen wipers: they hang from the top of the screen and swing side to side ----
+  const wipers = [{ x: -0.7, park: 1.15, sign: -1 }, { x: 0.72, park: -1.15, sign: 1 }].map((spec) => {
+    const pivot = new THREE.Group();
+    pivot.position.set(spec.x, L.WINDSCREEN_TOP_Y - 0.03, L.WINDSCREEN_Z + 0.04);
+    const arm = new THREE.Mesh(new THREE.BoxGeometry(0.014, 0.66, 0.01), new THREE.MeshLambertMaterial({ color: "#101112" }));
+    arm.position.y = -0.33;
+    const blade = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.42, 0.012), new THREE.MeshLambertMaterial({ color: "#050505" }));
+    blade.position.y = -0.44;
+    pivot.add(arm, blade);
+    pivot.rotation.z = spec.park;
+    cab.add(pivot);
+    return { pivot, ...spec };
+  });
+
+  // ---- Headlight beams: a spotlight shining down the track from the front of the loco ----
+  let headlamp = null;
+  if (C.HEADLIGHT_BEAMS) {
+    headlamp = new THREE.SpotLight("#fff2d0", 0, C.HEADLIGHT_RANGE_M, 0.3, 0.6, 1);
+    headlamp.position.set(0, 2.5, -3.0);
+    headlamp.target.position.set(0, -0.5, -70);
+    cab.add(headlamp, headlamp.target);
+  }
+
+  // ---- Every frame: make the instruments say what the train is doing ----
+  let wiperPhase = 0, wiperAmount = 0;
+  const shown = { reverser: 0, hornRoll: 0, hornPitch: 0, headlights: 0 };
+
+  function update(view, dt) {
+    const blend = (rate) => Math.min(1, dt * rate);
+
+    setNeedle(needles.speedometer, view.speed_mph, 0, 100);
+    setNeedle(needles.brakePipe, view.brakePipe_psi, 0, 100);
+    setNeedle(needles.brakeCylinder, view.brakeCylinder_psi, 0, 100);
+    setNeedle(needles.ammeter, view.tractionFraction * 10, 0, 10);
+
+    // The big handles swing round (a curve) toward the driver as you pull them.
+    brakeHandle.rotation.y = BRAKE_ARC.released + view.brakeHandle * (BRAKE_ARC.full - BRAKE_ARC.released);
+    powerHandle.rotation.y = POWER_ARC.off + view.throttle * (POWER_ARC.full - POWER_ARC.off);
+    shown.reverser += (view.reverser - shown.reverser) * blend(12);
+    reverser.rotation.x = -0.6 * shown.reverser; // forward tips it away from you
+
+    // The horn lever springs: left = low note, right = high note, both together = pulled toward you.
+    const rollTarget = (view.horn.high && !view.horn.low ? -0.5 : 0) + (view.horn.low && !view.horn.high ? 0.5 : 0);
+    const pitchTarget = view.horn.high && view.horn.low ? 0.5 : 0;
+    shown.hornRoll += (rollTarget - shown.hornRoll) * blend(30);
+    shown.hornPitch += (pitchTarget - shown.hornPitch) * blend(30);
+    hornLever.rotation.z = shown.hornRoll;
+    hornLever.rotation.x = shown.hornPitch;
+
+    setLamp(lamps["POWER CUT"], view.powerCut);
+    setLamp(lamps["BRAKES"], view.brakeCylinder_psi > 4);
+    setLamp(lamps["HORN"], view.horn.high || view.horn.low);
+
+    // Wipers sweep across and back while on, and settle to their parked spot when off.
+    if (view.wipers) wiperPhase += dt * 2.0;
+    wiperAmount += ((view.wipers ? 0.5 - 0.5 * Math.cos(wiperPhase * Math.PI * 2) : 0) - wiperAmount) * blend(14);
+    for (const w of wipers) w.pivot.rotation.z = w.park + w.sign * 1.4 * wiperAmount; // swings from its parked spot, across the glass
+
+    // Headlights: 0 = off, 1 = dipped, 2 = full beam. The beam eases up and down a little.
+    if (headlamp) {
+      const target = view.headlights === 2 ? C.HEADLIGHT_FULL : view.headlights === 1 ? C.HEADLIGHT_DIPPED : 0;
+      shown.headlights += (target - shown.headlights) * blend(10);
+      headlamp.intensity = shown.headlights;
+      const full = view.headlights === 2;
+      headlamp.angle += ((full ? 0.24 : 0.34) - headlamp.angle) * blend(6);
+      headlamp.target.position.z += ((full ? -110 : -45) - headlamp.target.position.z) * blend(6);
+    }
+  }
+
+  return { group: cab, update, parts: { brakeHandle, powerHandle, reverser, hornLever, wipers, headlamp, needles } };
 }

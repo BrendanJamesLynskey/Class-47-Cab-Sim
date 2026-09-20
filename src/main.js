@@ -20,6 +20,7 @@ import { createSky } from "./world/sky.js";
 import { createHud } from "./hud.js";
 import { createDebugReadout } from "./debug.js";
 import { createAdaptiveResolution } from "./adaptive.js";
+import { createAudio, auditHorn } from "./audio.js";
 
 const quality = C.QUALITY_SETTINGS[C.QUALITY] || C.QUALITY_SETTINGS.medium;
 const MAX_FRAME_S = 0.25;      // a long pause (like switching tabs) must not make the train jump
@@ -69,6 +70,7 @@ applyPictureSize();
 
 // ---- Controls, display, and the state of the game ----
 const controls = createControls();
+const audio = createAudio();
 const hud = createHud();
 const debug = createDebugReadout();
 hud.setEnabled(C.SHOW_HUD);
@@ -106,8 +108,8 @@ function startScreen() {
     title: C.GAME_TITLE,
     lines: [
       `Railtour, locomotive ${C.LOCO_NUMBER}`,
-      "RT more power   RB less power   LT more brake   LB less brake",
-      "D-pad up: reverser to Forward   A: horn   Back: emergency brake",
+      "RT more power  ·  RB less power  ·  LT more brake  ·  LB less brake",
+      "D-pad up/down: reverser  ·  D-pad left/right or A: horn  ·  Back: emergency brake",
     ],
     ...pad,
     prompt: controls.padStatus === "ready" ? "Press A to start" : "Press A (or Enter) to start",
@@ -120,7 +122,7 @@ function finishedScreen() {
     title: "End of the line",
     lines: [
       `You drove ${ROUTE.lengthMiles} miles in ${minutes} min ${seconds} s.`,
-      "That's all the track there is so far. The village and the town come next!",
+      "That's the end of the line for now. The village and the town come next!",
     ],
     prompt: "Press A to drive again",
   };
@@ -176,7 +178,8 @@ function updateView(seconds) {
   swayClock += seconds;
   const sway = C.CAB_SWAY_M * Math.min(1, train.speed_mps / 20);
   cabRoot.position.set(p.x, p.y + Math.sin(swayClock * 21) * sway, p.z);
-  cabRoot.rotation.set(Math.atan(p.slope), -p.heading, Math.sin(swayClock * 6.3) * sway * 0.6);
+  // The track leans into bends (p.roll), so the whole cab leans with it.
+  cabRoot.rotation.set(Math.atan(p.slope), -p.heading, -p.roll + Math.sin(swayClock * 6.3) * sway * 0.6);
 
   // Looking around: the head follows the stick smoothly and springs back to the middle.
   if (controls.recentrePressed) look = { yaw: 0, pitch: 0 };
@@ -186,9 +189,12 @@ function updateView(seconds) {
   const follow = 1 - Math.exp(-C.LOOK_SMOOTHING * seconds);
   look.yaw += (targetYaw - look.yaw) * follow;
   look.pitch += (targetPitch - look.pitch) * follow;
-  camera.rotation.set(look.pitch, look.yaw, 0);
+  camera.rotation.set(look.pitch + degrees(C.CAMERA_DEFAULT_PITCH_DEG), look.yaw, 0);
 
   const gauges = gaugeReadings(train);
+  // The horn only sounds while you are driving (not on the start screen or when paused).
+  const horn = { low: screen === "drive" && controls.hornLow, high: screen === "drive" && controls.hornHigh };
+  audio.setHorn(horn.low, horn.high);
   cab.update({
     speed_mph: mpsToMph(train.speed_mps),
     brakePipe_psi: gauges.brakePipe_psi,
@@ -198,7 +204,7 @@ function updateView(seconds) {
     brakeHandle: train.brakeHandle,
     reverser: train.reverser,
     powerCut: train.powerCutOut,
-    horn: controls.hornHigh || controls.hornLow,
+    horn,
     wipers: wipersOn,
     headlights,
   }, seconds);
@@ -247,6 +253,7 @@ function frame(now) {
   world.update(train.distance_m);
   updateHud();
   hud.setBehindOverlay(screen === "start");
+  hud.setSoundHint(audio.needsUnlock);
   hud.showOverlay(
     screen === "start" ? startScreen() : screen === "paused" ? pausedScreen : screen === "finished" ? finishedScreen() : null
   );
@@ -284,6 +291,8 @@ if (import.meta.env.DEV) {
     get adaptive() { return adaptive; },
     get headlights() { return headlights; },
     get wipersOn() { return wipersOn; },
+    audio, auditHorn,
+    setHeadlights(mode) { headlights = mode; },
     // Jump to a spot on the line (and build the world around it).
     teleport(distance_m) { train.distance_m = distance_m; world.prime(distance_m); },
     setReverser(value) { train.reverser = value; if (value) train.direction = value; },

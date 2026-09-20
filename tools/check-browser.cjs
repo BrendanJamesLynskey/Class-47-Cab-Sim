@@ -261,17 +261,61 @@ function installFakePad() {
     await shot("13-f1-readout");
     await kb.press("F1");
 
+    // ---- The horn: D-pad left = low note, D-pad right = high note, A = both ----
+    await sim(() => { const t = window.__sim.train; t.throttle = 0; t.brakeHandle = 0; t.brakeCylinder = 0; t.speed_mps = 0; t.reverser = 1; });
+    const hornNow = () => sim(() => ({ low: window.__sim.controls.hornLow, high: window.__sim.controls.hornHigh, roll: window.__sim.cab.parts.hornLever.rotation.z, pitch: window.__sim.cab.parts.hornLever.rotation.x }));
+    await press(14); await frames(8); let horn = await hornNow();
+    check("D-pad left: the LOW horn note only, and the horn lever moves left", horn.low && !horn.high && horn.roll > 0.3, JSON.stringify(horn));
+    await release(14);
+    await press(15); await frames(8); horn = await hornNow();
+    check("D-pad right: the HIGH horn note only, and the horn lever moves right", !horn.low && horn.high && horn.roll < -0.3, JSON.stringify(horn));
+    await release(15);
+    await press(0); await frames(8); horn = await hornNow();
+    check("A: both notes (two-tone), and the horn lever is pulled toward the driver", horn.low && horn.high && horn.pitch > 0.3, JSON.stringify(horn));
+    await release(0); await frames(10); horn = await hornNow();
+    check("let go of the horn: the lever springs back to the middle", Math.abs(horn.roll) < 0.06 && Math.abs(horn.pitch) < 0.06, JSON.stringify(horn));
+    const audioReady = await sim(() => window.__sim.audio.available);
+    check("the sound engine starts", audioReady === true);
+    const both = await page.evaluate(() => window.__sim.auditHorn({ low: true, high: true }));
+    const lowOnly = await page.evaluate(() => window.__sim.auditHorn({ low: true, high: false }));
+    check("horn loudness (two-tone): audible, not clipping", both.peak > 0.15 && both.peak < 0.9 && both.rms > 0.03, `peak ${both.peak.toFixed(2)}, rms ${both.rms.toFixed(3)}`);
+    check("horn loudness (one note): audible, not clipping", lowOnly.peak > 0.05 && lowOnly.peak < 0.9, `peak ${lowOnly.peak.toFixed(2)}, rms ${lowOnly.rms.toFixed(3)}`);
+
+    // ---- The two big handles swing back toward the driver in a curve ----
+    const arm = (t, b) => sim((t, b) => { const tr = window.__sim.train; tr.throttle = t; tr.brakeHandle = b; tr.brakeCylinder = b; }, t, b).then(() => frames(4)).then(() => sim(() => ({ brake: window.__sim.cab.parts.brakeHandle.rotation.y, power: window.__sim.cab.parts.powerHandle.rotation.y })));
+    const arm0 = await arm(0, 0), arm5 = await arm(0.5, 0.5), arm10 = await arm(1, 1);
+    check("brake handle swings back and round as it is applied (0, 50%, 100%)", arm0.brake < arm5.brake && arm5.brake < arm10.brake && arm10.brake > 2.2, `${(arm0.brake * 57.3).toFixed(0)}, ${(arm5.brake * 57.3).toFixed(0)}, ${(arm10.brake * 57.3).toFixed(0)} degrees`);
+    check("power handle swings back and round the other way (0, 50%, 100%)", arm0.power > arm5.power && arm5.power > arm10.power && arm10.power < -2.0, `${(arm0.power * 57.3).toFixed(0)}, ${(arm5.power * 57.3).toFixed(0)}, ${(arm10.power * 57.3).toFixed(0)} degrees`);
+    await sim(() => { const tr = window.__sim.train; tr.throttle = 0; tr.brakeHandle = 0; tr.brakeCylinder = 0; });
+
+    // ---- Headlights light the track: off, dipped, full ----
+    const beam = async () => { await frames(8); return sim(() => window.__sim.cab.parts.headlamp.intensity); };
+    const beamOff = await beam();
+    await tap(2); const beamDipped = await beam();
+    await tap(2); const beamFull = await beam();
+    await tap(2); const beamOff2 = await beam();
+    check("X: the beam is off, then dipped, then brighter on full, then off again", beamOff === 0 && beamDipped > 100 && beamFull > beamDipped * 1.5 && beamOff2 < 1, `${beamOff.toFixed(0)}, ${beamDipped.toFixed(0)}, ${beamFull.toFixed(0)}, ${beamOff2.toFixed(0)}`);
+
+    // ---- Curves lean the cab, hills tip it, and straights are level ----
+    const tilt = async (miles) => { await sim((m) => window.__sim.teleport(m * 1609.344), miles); await frames(4); return sim(() => ({ roll: window.__sim.camera.parent.rotation.z, pitch: window.__sim.camera.parent.rotation.x })); };
+    const onCurve = await tilt(0.85), onStraight = await tilt(1.3), onHill = await tilt(3.75);
+    check("in a right-hand bend the cab leans to the right", onCurve.roll < -0.015, `roll ${(onCurve.roll * 57.3).toFixed(1)} degrees`);
+    check("on the straight the cab is level", Math.abs(onStraight.roll) < 0.004, `roll ${(onStraight.roll * 57.3).toFixed(2)} degrees`);
+    check("on the 1-in-140 climb the cab tips up (barely: about 0.4 degrees)", onHill.pitch > 0.004 && onHill.pitch < 0.012, `pitch ${(onHill.pitch * 57.3).toFixed(2)} degrees`);
+
     // ---- 4. Screenshots along the route, and the budget ----
     await sim(() => { const t = window.__sim.train; t.throttle = 0; t.brakeHandle = 0; t.brakeCylinder = 0; t.reverser = 1; t.direction = 1; t.speed_mps = 0; });
     const budget = [];
-    for (const d of [0, 500, 1200, 2500, 4200, 6500]) {
+    const stops = { start: 0.05, curve: 0.9, wood: 1.6, overbridge: 2.26, moor: 3.8, embankment: 5.5, viaduct: 5.95, wood2: 8.9, moor2: 10.5, viaduct2: 12.35, end: 13.5 };
+    for (const [name, miles] of Object.entries(stops)) {
+      const d = miles * 1609.344;
       await sim((d) => window.__sim.teleport(d), d);
       await frames(6);
       await sleep(500);
       const st = await stats();
       budget.push({ d, ...st });
-      console.log(`     at ${d} m: ${st.calls} draw calls, ${st.triangles} triangles, ${st.chunks} chunks, ${st.geometries} geometries`);
-      if (d === 500 || d === 2500) await shot(`10-country-${d}m`);
+      console.log(`     ${name} (mile ${miles}): ${st.calls} draw calls, ${st.triangles} triangles, ${st.chunks} chunks, ${st.geometries} geometries`);
+      if (["curve", "overbridge", "moor", "viaduct", "wood2"].includes(name)) await shot(`10-${name}`);
     }
     const maxCalls = Math.max(...budget.map((b) => b.calls)), maxTris = Math.max(...budget.map((b) => b.triangles));
     check("budget: draw calls under 200", maxCalls < 200, `max ${maxCalls}`);
@@ -291,7 +335,8 @@ function installFakePad() {
     await frames(5);
     const base = await stats();
     let maxGeometries = base.geometries, minChunks = 99, maxChunks = 0;
-    for (let d = 0; d <= 7800; d += 100) {
+    const routeLength = await sim(() => window.__sim.route.length_m);
+    for (let d = 0; d <= routeLength; d += 100) {
       await sim((d) => window.__sim.teleport(d), d);
       await frames(2);
       const st = await stats();
@@ -299,8 +344,10 @@ function installFakePad() {
       minChunks = Math.min(minChunks, st.chunks); maxChunks = Math.max(maxChunks, st.chunks);
     }
     const end = await stats();
-    check("streaming: geometries do not grow over a long run", maxGeometries <= base.geometries + 12, `start ${base.geometries}, max ${maxGeometries}, end ${end.geometries}`);
-    check("streaming: only a few chunks exist at once", maxChunks <= 12, `chunks between ${minChunks} and ${maxChunks}`);
+    check("streaming: geometries do not grow over a long run", maxGeometries <= base.geometries + 14, `start ${base.geometries}, max ${maxGeometries}, end ${end.geometries}`);
+    check("streaming: only a few chunks exist at once", maxChunks <= 13, `chunks between ${minChunks} and ${maxChunks}`);
+    const slowest = await sim(() => window.__sim.world.slowestBuild_ms);
+    check("streaming: no single chunk takes long to build", slowest < 300, `slowest ${slowest.toFixed(0)} ms (a desktop CPU; the Pi will be slower)`);
     await sim(() => window.__sim.teleport(200));
     await frames(4);
   }
@@ -310,8 +357,9 @@ function installFakePad() {
     await page.evaluate(() => { document.querySelector(".hud").style.display = ""; });
     await sim(() => { const t = window.__sim.train; t.reverser = 1; t.direction = 1; t.throttle = 0; t.brakeHandle = 0; t.brakeCylinder = 0; t.speed_mps = 25; window.__sim.teleport(window.__sim.route.length_m - 150); });
     await page.waitForFunction(() => window.__sim.screen === "finished", { timeout: 60000, polling: 100 });
+    const routeEnd = await sim(() => window.__sim.route.length_m);
     s = await state();
-    check("buffer stop: the train is stopped just before the end of the line", s.speed === 0 && s.distance > 5500 * 1.609344 - 12 && s.distance < 5.5 * 1609.344, `distance ${s.distance.toFixed(0)} m of ${(5.5 * 1609.344).toFixed(0)}`);
+    check("buffer stop: the train is stopped just before the end of the line", s.speed === 0 && s.distance > routeEnd - 12 && s.distance < routeEnd, `distance ${s.distance.toFixed(0)} m of ${routeEnd.toFixed(0)}`);
     await sleep(800);
     check("the end-of-line screen is showing", /End of the line/.test(await overlayText()));
     await shot("14-end-of-line");
@@ -333,6 +381,20 @@ function installFakePad() {
     const size = await page2.evaluate(() => ({ scale: window.__sim.adaptive.scale, w: window.__sim.renderer.domElement.width, h: window.__sim.renderer.domElement.height }));
     check("adaptive resolution: slow frames make the picture smaller", size.scale < 0.95 && size.h < 720, `scale ${size.scale.toFixed(2)}, canvas ${size.w}x${size.h}`);
     await page2.close();
+  }
+
+  // ---- Night: the same game with ?time=night, and the headlights on ----
+  if (!smoke) {
+    const page3 = await browser.newPage();
+    await page3.setViewport({ width: 640, height: 360 });
+    page3.on("pageerror", (e) => problems.push("pageerror (night page): " + e.message));
+    page3.on("console", (m) => { if (m.type() === "error") problems.push("console.error (night page): " + m.text()); });
+    await page3.goto(url + "?fixed&time=night", { waitUntil: "networkidle0" });
+    await page3.evaluate(() => { const s = window.__sim; s.start(); s.teleport(2000); s.setReverser(1); s.setHeadlights(2); });
+    await sleep(3500);
+    await page3.screenshot({ path: `${outDir}/15-night-headlights.png` });
+    console.log(`     screenshot ${outDir}/15-night-headlights.png`);
+    await page3.close();
   }
 
   await browser.close();

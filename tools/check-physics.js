@@ -69,6 +69,21 @@ accelerationTests(12, [130, 260], [72, 85]);
   check("8 coaches up a 1-in-50 climb", mpsToMph(train.speed_mps), 35, 45, "mph");
 }
 
+// ---- The gentle hills of the real route: barely visible, but a heavy train feels them ----
+{
+  const train = setUp({ coaches: 8, throttle: 1 });
+  run(train, { slope: 1 / 150, maxSeconds: 2000 });
+  check("8 coaches up a gentle 1-in-150 hill (full power)", mpsToMph(train.speed_mps), 62, 76, "mph");
+  const light = setUp({ coaches: 3, throttle: 1 });
+  run(light, { slope: 1 / 150, maxSeconds: 2000 });
+  checkTrue("3 coaches climb the same hill faster than 8", mpsToMph(light.speed_mps) > mpsToMph(train.speed_mps) + 8,
+    `${mpsToMph(light.speed_mps).toFixed(0)} mph against ${mpsToMph(train.speed_mps).toFixed(0)} mph`);
+  const downhill = setUp({ coaches: 8, startMph: 60 });
+  run(downhill, { slope: -1 / 150, maxSeconds: 40 });
+  checkTrue("coasting down a 1-in-150 hill, the train speeds up", mpsToMph(downhill.speed_mps) > 60,
+    `${mpsToMph(downhill.speed_mps).toFixed(1)} mph after 40 s`);
+}
+
 // ---- Coasting: it should slow only gently ----
 {
   const train = setUp({ coaches: 8, startMph: 60 });

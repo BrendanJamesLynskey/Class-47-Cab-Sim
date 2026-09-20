@@ -7,7 +7,6 @@
 // ---- The game ----
 export const GAME_TITLE = "Class 47 Cab Simulator"; // shown on the start screen. Give it a name!
 export const LOCO_NUMBER = "47790";                 // the number on the locomotive
-export const LOCO_COLOR = "#2a4f8f";                // the paint on the nose of the loco. Try "#1f6b3a" (green) or "#b3282d" (red)
 
 // ---- Your train (try these first!) ----
 export const COACHES = 8; // how many coaches behind the loco. Try 3 (quick and light) or 12 (slow and heavy!)
@@ -45,6 +44,18 @@ export const BRAKE_APPLY_RATE = 0.5;     // LT applies the brake handle
 export const BRAKE_RELEASE_RATE = 0.9;   // LB releases it
 export const REVERSER_MAX_SPEED_MPH = 0.5; // you can only change direction when nearly stopped
 
+// ---- The horn (a real two-tone horn: a low note and a high note, a major third apart) ----
+export const HORN_LOW_HZ = 340;    // the low note. Change it to change the horn's pitch!
+export const HORN_HIGH_HZ = 425;   // the high note
+export const HORN_VOLUME = 0.35;   // how loud, 0 to 1 (never above about 0.6 or it may crackle)
+export const MASTER_VOLUME = 0.8;  // the volume of all the game's sounds
+
+// ---- Headlights ----
+export const HEADLIGHT_BEAMS = true;    // false = no light beams at all (a little faster on a slow computer)
+export const HEADLIGHT_DIPPED = 150;     // how bright the dipped beam is
+export const HEADLIGHT_FULL = 340;      // how bright the full beam is
+export const HEADLIGHT_RANGE_M = 260;   // how far the beam reaches
+
 // ---- Speed limit ----
 export const SPEEDING_MARGIN_MPH = 0.5; // how far over the limit before the HUD limit starts to flash
 
@@ -58,6 +69,7 @@ export const LOOK_PITCH_DOWN_DEG = 25; // and down (look down to read the gauges
 export const LOOK_SMOOTHING = 8;       // how quickly your head follows the stick (bigger = snappier)
 export const MOUSE_LOOK_PIXELS = 300;  // dragging the mouse this far looks all the way round
 export const CAB_SWAY_M = 0.003;       // how much the cab shakes as you go faster. 0 = smooth as glass
+export const CAMERA_DEFAULT_PITCH_DEG = -2; // the driver's eyes rest a little below level (negative = looking down)
 
 // ---- The keyboard (the names are the KeyboardEvent "code" of each key) ----
 export const KEYS = {
@@ -96,22 +108,41 @@ export const CAMERA_FOV_DEG = 65;     // how wide the view is (bigger = more fis
 export const MIN_RESOLUTION_SCALE = 0.5; // the game can shrink the picture to this much to keep running smoothly
 export const SHOW_HUD = true;         // the little speed/limit display at the top. Press T to hide it
 
+// ---- How the track bends and climbs ----
+export const EASEMENT_M = 150;            // curves tighten gradually over this many metres, like real railways
+export const CANT_PER_CURVATURE = 55;     // how far the track leans into a bend. 0 = no leaning, 110 = a lot
+export const GRADIENT_SMOOTHING_M = 120;  // hills change slope gradually over this many metres
+
+// ---- The time of day ----
+// "day", "dusk" or "night". At dusk and night the headlights (X button) really light up the track!
+export const TIME_OF_DAY = "day";
+export const TIME_PRESETS = {
+  day:   { skyTop: "#3f7fcf", skyHorizon: "#cfe3ee", hill: "#8ea1a8", sun: "#fff3c4", skyLight: "#cfe3ff", groundLight: "#a5a48a",
+           skyLightAmount: 1.5, sunAmount: 2.3, fogNearFraction: 0.25, sunSprite: 1, cloud: 1, cabGlow: 0 },
+  dusk:  { skyTop: "#27336b", skyHorizon: "#e8956a", hill: "#5a5670", sun: "#ffb070", skyLight: "#8f8fc8", groundLight: "#6a5a58",
+           skyLightAmount: 0.7, sunAmount: 0.9, fogNearFraction: 0.12, sunSprite: 1, cloud: 0.6, cabGlow: 0.5 },
+  night: { skyTop: "#04081a", skyHorizon: "#111a33", hill: "#0c1222", sun: "#7f93cc", skyLight: "#33406e", groundLight: "#141a28",
+           skyLightAmount: 0.42, sunAmount: 0.35, fogNearFraction: 0.05, sunSprite: 0, cloud: 0.15, stars: 1, cabGlow: 1 },
+};
+
 // ---- The world ----
 export const CHUNK_LENGTH_M = 100;    // the world is built in pieces this long, just ahead of the train
 export const CHUNKS_BEHIND = 2;       // and thrown away this many pieces behind it (so looking over your shoulder isn't empty)
 export const WORLD_SEED = 47;         // the same number always makes the same countryside. Try 5!
-export const MAX_CHUNK_BUILDS_PER_FRAME = 1; // building bits of world is slow; only do this many per frame
+export const MAX_BUILD_STEPS_PER_FRAME = 1; // building bits of world is slow, so it is done in small steps: only this many per frame
 
 // ---- Track sizes (real ones: standard gauge is 1.435 m) ----
 export const TRACK_GAUGE_M = 1.435;
 export const SLEEPER_SPACING_M = 0.7;
 
 // ---- Colours ----
-export const SKY_TOP_COLOR = "#3f7fcf";     // the sky straight up
-export const SKY_HORIZON_COLOR = "#cfe3ee"; // the sky at the horizon (the mist matches this)
-export const SUN_COLOR = "#fff3c4";
-export const HILL_COLOR = "#8ea1a8";        // the hills on the horizon
 export const GRASS_COLORS = ["#5f9a3c", "#6fa844", "#4f8a34", "#86ae4e"]; // the fields
+export const MOOR_COLORS = ["#8c8b4f", "#a29a5c", "#75804a", "#9b7d5a"];   // rough hill grass
+export const HEATHER_COLOR = "#7d5a86";
+export const CUTTING_COLOR = "#7a705a";     // the earth sides of a cutting
+export const WATER_COLOR = "#5b8fa8";       // rivers
+export const BRICK_COLOR = "#93594a";       // bridges
+export const STONE_COLOR = "#a09c90";
 export const PLOUGHED_COLOR = "#7a5a3c";
 export const CESS_COLOR = "#7d7a66";        // the strip beside the track
 export const BALLAST_COLOR = "#8a857b";     // the stones under the track
@@ -126,7 +157,9 @@ export const CONIFER_COLOR = "#2d5a34";
 export const TRUNK_COLOR = "#5a4632";
 
 // ---- The cab colours ----
-export const CAB_SHELL_COLOR = "#d9d3bd";  // the cream walls
-export const CAB_FLOOR_COLOR = "#4a4d50";
-export const CAB_DESK_COLOR = "#3c4044";   // the dark grey desk
+export const CAB_SHELL_COLOR = "#dcd8c6";  // the cream walls
+export const CAB_DADO_COLOR = "#3f6b86";   // the blue panels low down
+export const CAB_FLOOR_COLOR = "#3f4245";
+export const CAB_DESK_COLOR = "#2a2d31";   // the dark desk top
 export const CAB_FRAME_COLOR = "#26282b";  // window frames
+export const CAB_SEAT_COLOR = "#4a4f6a";   // the seats

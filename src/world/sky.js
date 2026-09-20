@@ -5,6 +5,11 @@ import * as THREE from "three";
 import * as C from "../config.js";
 import { makeRandom } from "./random.js";
 
+// Which time of day we are showing: "day", "dusk" or "night" (TIME_OF_DAY in config.js).
+// You can also add ?time=dusk or ?time=night to the web address to try one out.
+const requested = typeof location !== "undefined" ? new URLSearchParams(location.search).get("time") : null;
+export const PRESET = C.TIME_PRESETS[requested] || C.TIME_PRESETS[C.TIME_OF_DAY] || C.TIME_PRESETS.day;
+
 const SKY_RADIUS_M = 2000;
 const HILL_RING_SEGMENTS = 72;
 
@@ -34,8 +39,8 @@ function softBlobTexture(width, height, blobs) {
 
 function makeSkyDome() {
   const geometry = new THREE.SphereGeometry(SKY_RADIUS_M, 24, 16);
-  const top = new THREE.Color(C.SKY_TOP_COLOR);
-  const horizon = new THREE.Color(C.SKY_HORIZON_COLOR);
+  const top = new THREE.Color(PRESET.skyTop);
+  const horizon = new THREE.Color(PRESET.skyHorizon);
   const colors = [];
   const positions = geometry.attributes.position;
   const mixed = new THREE.Color();
@@ -65,8 +70,8 @@ function makeHillRing(radius, minHeight, maxHeight, hazeAmount, seed) {
   }
   const positions = [];
   const colors = [];
-  const hill = new THREE.Color(C.HILL_COLOR);
-  const haze = new THREE.Color(C.SKY_HORIZON_COLOR);
+  const hill = new THREE.Color(PRESET.hill);
+  const haze = new THREE.Color(PRESET.skyHorizon);
   const topColor = hill.clone().lerp(haze, hazeAmount);
   const bottomColor = hill.clone().lerp(haze, Math.min(1, hazeAmount + 0.25));
   const corner = (i, top) => {
@@ -93,7 +98,7 @@ function makeClouds() {
   const texture = softBlobTexture(256, 128, [
     [0.3, 0.6, 0.22, 0.9], [0.5, 0.5, 0.28, 0.95], [0.7, 0.6, 0.22, 0.9], [0.45, 0.72, 0.2, 0.7], [0.62, 0.35, 0.16, 0.8],
   ]);
-  const material = new THREE.SpriteMaterial({ map: texture, fog: false, depthWrite: false, transparent: true, opacity: 0.92 });
+  const material = new THREE.SpriteMaterial({ map: texture, fog: false, depthWrite: false, transparent: true, opacity: 0.92 * PRESET.cloud });
   const group = new THREE.Group();
   const random = makeRandom(C.WORLD_SEED + 99);
   for (let i = 0; i < 14; i++) {
@@ -109,10 +114,26 @@ function makeClouds() {
 }
 
 // Adds the sky, hills, sun, clouds and lights to the scene. Call update() every frame.
+// A scattering of stars for the night sky.
+function makeStars() {
+  const random = makeRandom(C.WORLD_SEED + 5);
+  const positions = [];
+  for (let i = 0; i < 450; i++) {
+    const azimuth = random() * Math.PI * 2, elevation = Math.asin(0.05 + random() * 0.95);
+    positions.push(Math.sin(azimuth) * Math.cos(elevation) * 1900, Math.sin(elevation) * 1900, -Math.cos(azimuth) * Math.cos(elevation) * 1900);
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  const stars = new THREE.Points(geometry, new THREE.PointsMaterial({ color: "#dfe6ff", size: 2, sizeAttenuation: false, fog: false, depthWrite: false }));
+  stars.frustumCulled = false;
+  stars.renderOrder = -9;
+  return stars;
+}
+
 export function createSky(scene, quality) {
-  const horizon = new THREE.Color(C.SKY_HORIZON_COLOR);
+  const horizon = new THREE.Color(PRESET.skyHorizon);
   scene.background = horizon;
-  scene.fog = new THREE.Fog(horizon, quality.fogFar_m * 0.25, quality.fogFar_m);
+  scene.fog = new THREE.Fog(horizon, quality.fogFar_m * PRESET.fogNearFraction, quality.fogFar_m);
 
   const dome = makeSkyDome();
   const farHills = makeHillRing(1600, 50, 190, 0.55, 5);
@@ -121,16 +142,18 @@ export function createSky(scene, quality) {
 
   const sunMaterial = new THREE.SpriteMaterial({
     map: softBlobTexture(128, 128, [[0.5, 0.5, 0.5, 1], [0.5, 0.5, 0.18, 1]]),
-    color: C.SUN_COLOR, fog: false, depthWrite: false, transparent: true,
+    color: PRESET.sun, fog: false, depthWrite: false, transparent: true,
   });
   const sun = new THREE.Sprite(sunMaterial);
   sun.scale.set(420, 420, 1);
+  sun.visible = PRESET.sunSprite > 0;
 
   scene.add(dome, farHills, nearHills, clouds, sun);
+  if (PRESET.stars) scene.add(makeStars());
 
   // Light: the sky lights everything a little from above, the sun lights it from one side.
-  const skyLight = new THREE.HemisphereLight("#cfe3ff", "#a5a48a", 1.5);
-  const sunLight = new THREE.DirectionalLight(C.SUN_COLOR, 2.3);
+  const skyLight = new THREE.HemisphereLight(PRESET.skyLight, PRESET.groundLight, PRESET.skyLightAmount);
+  const sunLight = new THREE.DirectionalLight(PRESET.sun, PRESET.sunAmount);
   sunLight.position.copy(SUN_LIGHT_DIRECTION).multiplyScalar(100);
   scene.add(skyLight, sunLight);
 

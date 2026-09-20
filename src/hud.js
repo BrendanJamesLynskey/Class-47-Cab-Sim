@@ -35,6 +35,10 @@ export function createHud() {
   const hintText = el("div", "hud-hint", root);
   const statusText = el("div", "hud-status", root);
 
+  const soundHint = el("div", "sound-hint", document.body);
+  soundHint.textContent = "Sound off: press any key";
+  soundHint.style.display = "none";
+
   // ---- The big message screen ----
   const overlay = el("div", "overlay", document.body);
   const card = el("div", "overlay-card", overlay);
@@ -55,6 +59,8 @@ export function createHud() {
     setEnabled(enabled) { enabledByDriver = enabled; refresh(); },
     toggle() { enabledByDriver = !enabledByDriver; refresh(); },
     setBehindOverlay(hidden) { hiddenBehindOverlay = hidden; refresh(); },
+    // Browsers keep sound off until a key is pressed: tell the player how to turn it on.
+    setSoundHint(visible) { soundHint.style.display = visible ? "block" : "none"; },
 
     // view = { speed_mph, limit_mph, speeding, throttle, brakeHandle, reverser, distance_miles, length_miles, hint, status }
     update(view) {

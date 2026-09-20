@@ -64,6 +64,8 @@ function gableTemplate() {
 }
 
 export const BOX = templateFrom(new THREE.BoxGeometry(1, 1, 1));               // 1 x 1 x 1, no underside
+export const BOX_FULL = templateFrom(new THREE.BoxGeometry(1, 1, 1), { dropBottom: false }); // with an underside (for ceilings)
+export const CYLINDER = templateFrom(new THREE.CylinderGeometry(0.5, 0.5, 1, 12));   // width 1, height 1, no underside
 export const CONE = templateFrom(new THREE.ConeGeometry(1, 1, 6));             // radius 1, height 1, 6 sides
 export const BLOB = templateFrom(new THREE.IcosahedronGeometry(1, 0), { dropBottom: false }); // a rough ball: tree tops
 export const GABLE = gableTemplate();                                          // a pitched roof
@@ -93,8 +95,8 @@ export class MeshBuilder {
   // Adds a copy of a template shape: centred at (x, y, z), stretched to (sx, sy, sz),
   // turned by `yaw` and tilted by `pitch` (radians). Yaw is the same as the train's:
   // yaw = -heading points the shape's length along the track.
-  addShape(template, x, y, z, sx, sy, sz, yaw, pitch, color, brightness = 1) {
-    _euler.set(pitch, yaw, 0);
+  addShape(template, x, y, z, sx, sy, sz, yaw, pitch, color, brightness = 1, roll = 0) {
+    _euler.set(pitch, yaw, roll);
     _quaternion.setFromEuler(_euler);
     _position.set(x, y, z);
     _scale.set(sx, sy, sz);
@@ -114,8 +116,14 @@ export class MeshBuilder {
   }
 
   // A box centred at (x, y, z) with the given width (across), height and length (along Z).
-  addBox(x, y, z, width, height, length, yaw, color, brightness = 1, pitch = 0) {
-    this.addShape(BOX, x, y, z, width, height, length, yaw, pitch, color, brightness);
+  // `pitch` tilts it uphill/downhill and `roll` leans it sideways (positive roll raises its right side).
+  addBox(x, y, z, width, height, length, yaw, color, brightness = 1, pitch = 0, roll = 0) {
+    this.addShape(BOX, x, y, z, width, height, length, yaw, pitch, color, brightness, roll);
+  }
+
+  // A box with all six sides (for things you see from underneath, like a ceiling).
+  addSolid(x, y, z, width, height, length, yaw, color, brightness = 1, pitch = 0, roll = 0) {
+    this.addShape(BOX_FULL, x, y, z, width, height, length, yaw, pitch, color, brightness, roll);
   }
 
   // A long thin box from point A to point B: rails, hedges, fence rails, wires.
@@ -143,6 +151,17 @@ export class MeshBuilder {
       this.normals.push(nx, ny, nz);
       this.colors.push(color.r * brightness, color.g * brightness, color.b * brightness);
     }
+  }
+
+  // A flat four-cornered patch facing the way `facing` ([x, y, z]) points, whichever way round the corners were given.
+  addQuadFacing(a, b, c, d, color, brightness, facing) {
+    const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2];
+    const vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
+    const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+    const flip = nx * facing[0] + ny * facing[1] + nz * facing[2] < 0;
+    const corners = flip ? [a, d, c, b] : [a, b, c, d];
+    this.addTriangle(corners[0], corners[1], corners[2], color, brightness, false);
+    this.addTriangle(corners[0], corners[2], corners[3], color, brightness, false);
   }
 
   // A four-cornered flat patch (two triangles), for ground.

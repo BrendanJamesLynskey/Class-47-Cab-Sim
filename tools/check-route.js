@@ -8,9 +8,12 @@
 import { ROUTE, routeInMetres, speedLimitAt } from "../src/route.js";
 import { buildPath } from "../src/path.js";
 import { milesToMetres } from "../src/units.js";
+import { EASEMENT_M } from "../src/config.js";
 
 const MAX_GRADIENT = 1 / 40;      // steeper than 1 in 40 is not a main line
-const MIN_CURVE_RADIUS_M = 800;   // tighter than this makes the scenery on the inside of the bend overlap
+const MIN_CURVE_RADIUS_M = 1000;  // tighter than this makes the scenery on the inside of the bend overlap
+const MAX_ELEVATION_RANGE_M = 80; // the whole line should not climb or fall more than this overall
+const MIN_BRIDGE_CLEAR_M = 150;   // bridges keep this far from the bends (they are built straight)
 const MIN_TUNNEL_M = 50;
 
 // Returns a list of problems (an empty list means the route is fine).
@@ -63,6 +66,20 @@ export function findProblems(route) {
     if (milesToMetres(t.to - t.from) < MIN_TUNNEL_M) fail(`tunnels[${i}] is shorter than ${MIN_TUNNEL_M} m`);
   });
 
+  // Bridges: a river bridge belongs in a "valley", a road bridge in a "cutting", and both on straight track.
+  const environmentAt = (miles) => route.environment.find((e) => miles >= e.from && miles < e.to);
+  route.bridges.forEach((b, i) => {
+    const middle = (b.from + b.to) / 2;
+    const environment = environmentAt(middle);
+    if (b.kind === "river" && environment?.type !== "valley") fail(`bridges[${i}] is a river bridge, but the scenery there is "${environment?.type}" (it should be "valley")`);
+    if (b.kind === "road" && environment?.type !== "cutting") fail(`bridges[${i}] is a road bridge, but the scenery there is "${environment?.type}" (it should be "cutting")`);
+    if (b.kind !== "river" && b.kind !== "road") fail(`bridges[${i}]: kind must be "river" or "road"`);
+    const nearBend = route.curves.find((c) => middle > c.from - MIN_BRIDGE_CLEAR_M / 1609.344 && middle < c.to + MIN_BRIDGE_CLEAR_M / 1609.344);
+    if (nearBend) fail(`bridges[${i}] is too close to a bend (keep ${MIN_BRIDGE_CLEAR_M} m clear)`);
+    const onHill = route.gradients.find((g) => middle > g.from - 0.05 && middle < g.to + 0.05);
+    if (onHill) fail(`bridges[${i}] is on a slope: leave the track level for 0.05 miles either side`);
+  });
+
   // Stations: in order, inside the line, platforms not overlapping.
   let previousPlatformEnd = -Infinity;
   route.stations.forEach((s, i) => {
@@ -105,6 +122,32 @@ function report(name, problems) {
 // ---- 1. The real route ----
 report(`route "${ROUTE.name}" (${ROUTE.lengthMiles} miles)`, findProblems(ROUTE));
 
+// ---- 1b. What does the real route do? (heights, direction, steepest hill) ----
+{
+  const problems = [];
+  const metric = routeInMetres(ROUTE);
+  const path = buildPath(metric);
+  let lowest = Infinity, highest = -Infinity, steepest = 0, wander = 0;
+  for (let d = 0; d <= metric.length_m; d += 25) {
+    const p = path.pathAt(d);
+    lowest = Math.min(lowest, p.y); highest = Math.max(highest, p.y);
+    steepest = Math.max(steepest, Math.abs(p.slope));
+    wander = Math.max(wander, Math.hypot(p.x, p.z));
+  }
+  const end = path.pathAt(metric.length_m);
+  console.log(`      the line: ${(metric.length_m / 1609.344).toFixed(1)} miles, height from ${lowest.toFixed(1)} m to ${highest.toFixed(1)} m, steepest 1 in ${(1 / steepest).toFixed(0)}, ends ${Math.hypot(end.x, end.z).toFixed(0)} m from the start as the crow flies, turned ${(end.heading * 57.2958).toFixed(0)} degrees overall`);
+  if (highest - lowest > MAX_ELEVATION_RANGE_M) problems.push(`the line climbs and falls ${(highest - lowest).toFixed(0)} m overall (more than ${MAX_ELEVATION_RANGE_M} m)`);
+  // The route should never come back close to itself (the scenery would overlap).
+  for (let a = 0; a < metric.length_m; a += 400) {
+    const pa = path.pathAt(a);
+    for (let b = a + 2500; b < metric.length_m; b += 400) {
+      const pb = path.pathAt(b);
+      if (Math.hypot(pa.x - pb.x, pa.z - pb.z) < 1000) { problems.push(`the line passes within 1 km of itself at ${(a / 1609.344).toFixed(1)} and ${(b / 1609.344).toFixed(1)} miles`); a = Infinity; break; }
+    }
+  }
+  report("the real route's shape is sensible", problems);
+}
+
 // ---- 2. Does the checker itself catch mistakes? Try some deliberately bad routes. ----
 function expectProblem(name, change) {
   const bad = structuredClone(ROUTE);
@@ -122,6 +165,8 @@ expectProblem("a signal inside a platform", (r) => {
   r.signals = [{ at: 1.01, aspect: "green" }];
 });
 expectProblem("scenery that stops before the end", (r) => (r.environment = [{ from: 0, to: 3, type: "country" }]));
+expectProblem("a river bridge in the wrong scenery", (r) => (r.bridges = [{ from: 1.0, to: 1.02, kind: "river" }]));
+expectProblem("a bridge on a bend", (r) => (r.bridges = [{ from: 6.99, to: 7.01, kind: "road" }]));
 expectProblem("a curve that is too tight", (r) => (r.curves = [{ from: 1, to: 1.2, radius_m: 200, direction: "left" }]));
 
 // ---- 3. Does the track shape come out right? (checked against known geometry) ----
@@ -135,12 +180,17 @@ expectProblem("a curve that is too tight", (r) => (r.curves = [{ from: 1, to: 1.
   if (start.x !== 0 || start.z !== 0 || start.heading !== 0) problems.push("the line should start at the origin, facing -Z");
   const straight = path.pathAt(400);
   if (Math.abs(straight.z + 400) > 0.01 || Math.abs(straight.x) > 0.01) problems.push("straight track should run along -Z");
-  // A 1 mile curve of radius 1000 m turns through (1609.344 / 1000) radians, to the right (positive heading).
+  // A 1 mile curve of radius 1000 m turns through (length - easement) / radius radians: the
+  // easement is the gradual tightening at each end, and it turns less than a full-tightness bend.
   const afterCurve = path.pathAt(milesToMetres(1.5) + 1);
-  const expectedTurn = milesToMetres(1) / 1000;
+  const expectedTurn = (milesToMetres(1) - EASEMENT_M) / 1000;
   if (Math.abs(afterCurve.heading - expectedTurn) > 0.01) problems.push(`curve turned ${afterCurve.heading.toFixed(3)} rad, expected ${expectedTurn.toFixed(3)}`);
-  const afterHill = path.pathAt(milesToMetres(3) + 1);
+  const afterHill = path.pathAt(milesToMetres(3) + 200);
   if (Math.abs(afterHill.y - milesToMetres(1) / 100) > 0.05) problems.push(`1-in-100 for a mile rose ${afterHill.y.toFixed(2)} m, expected ${(milesToMetres(1) / 100).toFixed(2)}`);
+  const middleOfCurve = path.pathAt(milesToMetres(1.0));
+  if (Math.abs(middleOfCurve.roll - 55 / 1000) > 0.002 && Math.abs(middleOfCurve.roll) < 0.04) problems.push(`the track should lean into the bend, but roll is ${middleOfCurve.roll.toFixed(3)}`);
+  const beforeCurve = path.pathAt(milesToMetres(0.5) + 10);
+  if (Math.abs(beforeCurve.heading) > 0.01) problems.push(`the bend should start gently (easement), but heading is already ${beforeCurve.heading.toFixed(3)} rad 10 m in`);
   report("path.js turns curves and hills into the right 3D shape", problems);
 }
 

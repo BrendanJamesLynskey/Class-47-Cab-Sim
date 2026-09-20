@@ -32,7 +32,7 @@ export function addTrack(builder, ctx, d0, d1) {
   for (let k = first; k * C.SLEEPER_SPACING_M < end; k++) {
     const p = path.pathAt(k * C.SLEEPER_SPACING_M, a);
     builder.addBox(p.x, p.y - RAIL_HEIGHT_M - SLEEPER_HEIGHT_M / 2, p.z, SLEEPER_WIDTH_M, SLEEPER_HEIGHT_M, SLEEPER_LENGTH_M,
-      -p.heading, sleeper, 1, Math.atan(p.slope));
+      -p.heading, sleeper, 1, Math.atan(p.slope), -p.roll); // (roll is negative-z: a right-hand bend leans the right side down)
   }
 
   // Ballast: a wide low bank of stones, with a wider, lower "shoulder" under it.
@@ -54,7 +54,9 @@ export function addTrack(builder, ctx, d0, d1) {
     for (const side of [-1, 1]) {
       pointBeside(pa, side * half, pointA);
       pointBeside(pb, side * half, pointB);
-      builder.addBeam(pointA.x, pa.y - RAIL_HEIGHT_M, pointA.z, pointB.x, pb.y - RAIL_HEIGHT_M, pointB.z, RAIL_WIDTH_M, RAIL_HEIGHT_M, rail, 1);
+      // On a bend the outer rail is a little higher than the inner one (the track "leans").
+      const liftA = -side * half * Math.sin(pa.roll), liftB = -side * half * Math.sin(pb.roll);
+      builder.addBeam(pointA.x, pa.y - RAIL_HEIGHT_M + liftA, pointA.z, pointB.x, pb.y - RAIL_HEIGHT_M + liftB, pointB.z, RAIL_WIDTH_M, RAIL_HEIGHT_M, rail, 1);
     }
   }
 }

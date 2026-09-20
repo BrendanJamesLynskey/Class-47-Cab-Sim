@@ -26,7 +26,7 @@ export function addFarm(builder, x, y, z, yaw, random) {
   // `right` is along the farm's width, `forward` along its length.
   const place = (right, forward) => inBuildingDirections(x, z, yaw, right, forward);
 
-  builder.addBox(x, y + 0.04, z, 30, 0.08, 26, yaw, colour("#8c7f68")); // the muddy yard
+  builder.addBox(x, y + 0.04, z, 24, 0.08, 22, yaw, colour("#8c7f68")); // the muddy yard
 
   const [hx, hz] = place(-9, 0);
   addHouse(builder, hx, y, hz, yaw, 8, 5, 6.5, random() < 0.5 ? "#d9cfb6" : "#b9a88a", "#6a4a40", 2.6);

@@ -8,6 +8,7 @@
 // Four buttons drive the train, and they work like real levers:
 //   RT (right trigger)  = more power         RB (right bumper) = less power
 //   LT (left trigger)   = more brake         LB (left bumper)  = less brake
+// D-pad up/down changes the reverser; D-pad left/right blows the low/high horn.
 
 import { STICK_DEADZONE, KEYS, MOUSE_LOOK_PIXELS } from "./config.js";
 
@@ -17,7 +18,7 @@ const BUTTON = {
   A: 0, B: 1, X: 2, Y: 3,
   LB: 4, RB: 5, LT: 6, RT: 7,
   BACK: 8, START: 9, L3: 10, R3: 11,
-  DPAD_UP: 12, DPAD_DOWN: 13,
+  DPAD_UP: 12, DPAD_DOWN: 13, DPAD_LEFT: 14, DPAD_RIGHT: 15,
 };
 const LEFT_STICK_X = 0; // axis numbers: -1 = full left, +1 = full right
 const LEFT_STICK_Y = 1; // -1 = full up, +1 = full down
@@ -90,8 +91,8 @@ export function createControls() {
     throttleDown: 0,  // RB
     brakeUp: 0,       // LT
     brakeDown: 0,     // LB
-    hornHigh: false,  // A (and H)
-    hornLow: false,   // A (and J)
+    hornHigh: false,  // D-pad right, A (both notes) and H
+    hornLow: false,   // D-pad left, A (both notes) and J
     look: { x: 0, y: 0 }, // left stick / Shift+arrows / mouse drag: -1..1, x right, y down
 
     // Pressed for ONE frame only
@@ -126,8 +127,9 @@ export function createControls() {
       controls.brakeUp = Math.max(triggerAmount(buttons && buttons[BUTTON.LT]), driveKey("brakeUp") ? 1 : 0);
       controls.brakeDown = Math.max(down(BUTTON.LB) ? 1 : 0, driveKey("brakeDown") ? 1 : 0);
 
-      controls.hornHigh = down(BUTTON.A) || keyDown("hornHigh");
-      controls.hornLow = down(BUTTON.A) || keyDown("hornLow");
+      // D-pad right sounds the high note, D-pad left the low note, and A (or both together) the two-tone horn.
+      controls.hornHigh = down(BUTTON.A) || down(BUTTON.DPAD_RIGHT) || keyDown("hornHigh");
+      controls.hornLow = down(BUTTON.A) || down(BUTTON.DPAD_LEFT) || keyDown("hornLow");
 
       let lookX = pad && buttons ? applyDeadzone(pad.axes[LEFT_STICK_X]) : 0;
       let lookY = pad && buttons ? applyDeadzone(pad.axes[LEFT_STICK_Y]) : 0;

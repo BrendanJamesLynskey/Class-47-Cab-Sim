@@ -6,6 +6,7 @@ import * as C from "../config.js";
 import { pointBeside } from "../path.js";
 import { colour } from "./mesh-builder.js";
 import { milesToMetres } from "../units.js";
+import { nearBridge } from "./bridges.js";
 
 const FENCE_OFFSET_M = 4.3;       // how far the fence is from the middle of the track
 const FENCE_SPACING_M = 4;        // one post every 4 m
@@ -16,7 +17,7 @@ const MILEPOST_SPACING_M = milesToMetres(0.25); // a milepost every quarter mile
 const MILEPOST_OFFSET_M = 3.6;
 const GROUND_DROP_M = 0.65;       // same as the terrain: ground beside the track is this far below the rails
 
-export function addFurniture(builder, ctx, d0, d1) {
+export function addFurniture(builder, ctx, terrain, d0, d1) {
   const { path, route } = ctx;
   const p = {}, q = {};
   const post = colour(C.FENCE_COLOR);
@@ -28,6 +29,7 @@ export function addFurniture(builder, ctx, d0, d1) {
   const firstPost = Math.ceil(d0 / spacing);
   for (let k = firstPost; k * spacing < fenceEnd; k++) {
     const d = k * spacing, dNext = Math.min((k + 1) * spacing, fenceEnd);
+    if (nearBridge(route, d) || nearBridge(route, dNext)) continue;
     for (const side of [-1, 1]) {
       const a = path.pathAt(d, p);
       const base = { x: pointBeside(a, side * FENCE_OFFSET_M, {}).x, z: pointBeside(a, side * FENCE_OFFSET_M, {}).z, y: a.y - GROUND_DROP_M };
@@ -43,8 +45,9 @@ export function addFurniture(builder, ctx, d0, d1) {
   const firstPole = Math.ceil(d0 / POLE_SPACING_M);
   for (let k = firstPole; k * POLE_SPACING_M < fenceEnd; k++) {
     const a = path.pathAt(k * POLE_SPACING_M, p);
+    if (nearBridge(route, k * POLE_SPACING_M) || nearBridge(route, (k + 1) * POLE_SPACING_M)) continue;
     const top = { ...pointBeside(a, POLE_OFFSET_M, {}) };
-    const groundY = a.y - GROUND_DROP_M;
+    const groundY = terrain.groundY(k * POLE_SPACING_M, POLE_OFFSET_M);
     builder.addBox(top.x, groundY + POLE_HEIGHT_M / 2, top.z, 0.22, POLE_HEIGHT_M, 0.22, -a.heading, wood);
     // The crossarm points across the track.
     builder.addBox(top.x, groundY + POLE_HEIGHT_M - 0.35, top.z, 1.7, 0.12, 0.12, -a.heading, wood);
@@ -54,7 +57,7 @@ export function addFurniture(builder, ctx, d0, d1) {
     for (const wireOffset of [-0.7, 0, 0.7]) {
       const from = pointBeside(a, POLE_OFFSET_M + wireOffset, {});
       const to = pointBeside(b, POLE_OFFSET_M + wireOffset, {});
-      builder.addBeam(from.x, groundY + POLE_HEIGHT_M - 0.3, from.z, to.x, b.y - GROUND_DROP_M + POLE_HEIGHT_M - 0.3, to.z, 0.025, 0.025, colour("#222222"));
+      builder.addBeam(from.x, groundY + POLE_HEIGHT_M - 0.3, from.z, to.x, terrain.groundY(nextD, POLE_OFFSET_M) + POLE_HEIGHT_M - 0.3, to.z, 0.025, 0.025, colour("#222222"));
     }
   }
 
@@ -63,8 +66,9 @@ export function addFurniture(builder, ctx, d0, d1) {
   for (let k = firstMilepost; k * MILEPOST_SPACING_M < fenceEnd; k++) {
     if (k === 0) continue;
     const a = path.pathAt(k * MILEPOST_SPACING_M, p);
+    if (nearBridge(route, k * MILEPOST_SPACING_M)) continue;
     const at = pointBeside(a, MILEPOST_OFFSET_M, {});
-    const groundY = a.y - GROUND_DROP_M;
+    const groundY = terrain.groundY(k * MILEPOST_SPACING_M, MILEPOST_OFFSET_M);
     builder.addBox(at.x, groundY + 0.5, at.z, 0.28, 1.0, 0.14, -a.heading, colour("#f2f0e6"));
     builder.addBox(at.x, groundY + 1.03, at.z, 0.29, 0.14, 0.15, -a.heading, colour("#1c1c1c"));
   }
