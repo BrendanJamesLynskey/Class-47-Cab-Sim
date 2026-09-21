@@ -14,6 +14,7 @@ const MAX_GRADIENT = 1 / 40;      // steeper than 1 in 40 is not a main line
 const MIN_CURVE_RADIUS_M = 1000;  // tighter than this makes the scenery on the inside of the bend overlap
 const MAX_ELEVATION_RANGE_M = 80; // the whole line should not climb or fall more than this overall
 const MIN_BRIDGE_CLEAR_M = 150;   // bridges keep this far from the bends (they are built straight)
+const MIN_CROSSING_CLEAR_M = 100; // level crossings keep this far from bends, bridges and platforms
 const MIN_TUNNEL_M = 50;
 
 // Returns a list of problems (an empty list means the route is fine).
@@ -92,6 +93,32 @@ export function findProblems(route) {
     previousPlatformEnd = end;
   });
 
+  // Stations sit in flat "station" scenery, and the train starts on the first platform.
+  route.stations.forEach((st, i) => {
+    const env = environmentAt(st.at);
+    if (env?.type !== "station") fail(`stations[${i}] (${st.name}): the scenery there is "${env?.type}", it should be "station"`);
+    const near = route.curves.find((c) => st.at > c.from - (st.platformLength_m / 2 + MIN_BRIDGE_CLEAR_M) / 1609.344 && st.at < c.to + (st.platformLength_m / 2 + MIN_BRIDGE_CLEAR_M) / 1609.344);
+    if (near) fail(`stations[${i}] (${st.name}) is too close to a bend (platforms are built straight)`);
+  });
+  if (route.startAt !== undefined && route.stations.length > 0) {
+    const first = route.stations[0];
+    const halfMiles = first.platformLength_m / 2 / 1609.344;
+    if (!(route.startAt > first.at - halfMiles + 0.01 && route.startAt < first.at + halfMiles)) fail(`startAt (${route.startAt}) is not on the first platform (${first.name})`);
+  }
+
+  // Level crossings: on straight track, away from bridges and platforms, and not in a cutting.
+  const milesToM = 1609.344;
+  route.levelCrossings.forEach((l, i) => {
+    const env = environmentAt(l.at);
+    if (env?.type === "cutting" || env?.type === "station") fail(`levelCrossings[${i}] is in a "${env.type}" (a footpath crossing needs level country)`);
+    const clear = MIN_CROSSING_CLEAR_M / milesToM;
+    if (route.curves.find((c) => l.at > c.from - clear && l.at < c.to + clear)) fail(`levelCrossings[${i}] is too close to a bend (keep ${MIN_CROSSING_CLEAR_M} m clear)`);
+    if (route.bridges.find((b) => l.at > b.from - clear && l.at < b.to + clear)) fail(`levelCrossings[${i}] is too close to a bridge`);
+    const platform = route.stations.find((st) => Math.abs(l.at - st.at) * milesToM < st.platformLength_m / 2 + MIN_CROSSING_CLEAR_M);
+    if (platform) fail(`levelCrossings[${i}] is too close to the platform at ${platform.name}`);
+    if (route.levelCrossings.find((other, j) => j !== i && Math.abs(other.at - l.at) * milesToM < 300)) fail(`levelCrossings[${i}] is within 300 m of another crossing`);
+  });
+
   // Signals and level crossings must not be inside a platform.
   const insidePlatform = (miles) =>
     route.stations.find((s) => Math.abs(milesToMetres(miles - s.at)) < s.platformLength_m / 2);
@@ -167,6 +194,10 @@ expectProblem("a signal inside a platform", (r) => {
 expectProblem("scenery that stops before the end", (r) => (r.environment = [{ from: 0, to: 3, type: "country" }]));
 expectProblem("a river bridge in the wrong scenery", (r) => (r.bridges = [{ from: 1.0, to: 1.02, kind: "river" }]));
 expectProblem("a bridge on a bend", (r) => (r.bridges = [{ from: 6.99, to: 7.01, kind: "road" }]));
+expectProblem("a footpath crossing on a bend", (r) => (r.levelCrossings = [{ at: 0.85, kind: "footpath" }]));
+expectProblem("a footpath crossing in a cutting", (r) => (r.levelCrossings = [{ at: 2.3, kind: "footpath" }]));
+expectProblem("a start position off the platform", (r) => (r.startAt = 0.5));
+expectProblem("a station in the wrong scenery", (r) => (r.stations = [{ name: "X", at: 3.5, platformLength_m: 180, side: "left" }]));
 expectProblem("a curve that is too tight", (r) => (r.curves = [{ from: 1, to: 1.2, radius_m: 200, direction: "left" }]));
 
 // ---- 3. Does the track shape come out right? (checked against known geometry) ----

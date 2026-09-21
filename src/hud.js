@@ -32,6 +32,7 @@ export function createHud() {
 
   const reverserText = el("div", "hud-reverser", root);
   const progressText = el("div", "hud-progress", root);
+  const nextText = el("div", "hud-next", root);
   const hintText = el("div", "hud-hint", root);
   const statusText = el("div", "hud-status", root);
 
@@ -74,6 +75,7 @@ export function createHud() {
       setText(reverserText, `Reverser: ${["Reverse", "Neutral", "Forward"][view.reverser + 1]}`);
       setClass(reverserText, "warn", view.reverser === 0);
       setText(progressText, `${view.distance_miles.toFixed(2)} of ${view.length_miles.toFixed(1)} miles`);
+      setText(nextText, view.next || "");
       setText(hintText, view.hint || "");
       setText(statusText, view.status || "");
     },

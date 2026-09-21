@@ -108,6 +108,9 @@ function installFakePad() {
     // ---- 3. Control mapping ----
     let s = await state();
     check("the game is on the drive screen", s.screen === "drive");
+    const startAt = await sim(() => window.__sim.route.start_m);
+    check("the train starts standing at the first platform", Math.abs(s.distance - startAt) < 1 && startAt > 100, `distance ${s.distance.toFixed(0)} m`);
+    check("the HUD says which station we are at", /At Aldbury/.test(await hud()), await hud());
     check("reverser starts in Neutral", s.reverser === 0);
 
     // Throttle in Neutral: friendly hint, and no movement.
@@ -284,8 +287,8 @@ function installFakePad() {
     // ---- The two big handles swing back toward the driver in a curve ----
     const arm = (t, b) => sim((t, b) => { const tr = window.__sim.train; tr.throttle = t; tr.brakeHandle = b; tr.brakeCylinder = b; }, t, b).then(() => frames(4)).then(() => sim(() => ({ brake: window.__sim.cab.parts.brakeHandle.rotation.y, power: window.__sim.cab.parts.powerHandle.rotation.y })));
     const arm0 = await arm(0, 0), arm5 = await arm(0.5, 0.5), arm10 = await arm(1, 1);
-    check("brake handle swings back and round as it is applied (0, 50%, 100%)", arm0.brake < arm5.brake && arm5.brake < arm10.brake && arm10.brake > 2.2, `${(arm0.brake * 57.3).toFixed(0)}, ${(arm5.brake * 57.3).toFixed(0)}, ${(arm10.brake * 57.3).toFixed(0)} degrees`);
-    check("power handle swings back and round the other way (0, 50%, 100%)", arm0.power > arm5.power && arm5.power > arm10.power && arm10.power < -2.0, `${(arm0.power * 57.3).toFixed(0)}, ${(arm5.power * 57.3).toFixed(0)}, ${(arm10.power * 57.3).toFixed(0)} degrees`);
+    check("brake handle turns CLOCKWISE (seen from above) toward full brake (0, 50%, 100%)", arm0.brake > arm5.brake && arm5.brake > arm10.brake && arm10.brake < -2.2, `${(arm0.brake * 57.3).toFixed(0)}, ${(arm5.brake * 57.3).toFixed(0)}, ${(arm10.brake * 57.3).toFixed(0)} degrees`);
+    check("power handle turns ANTICLOCKWISE (seen from above) toward full power (0, 50%, 100%)", arm0.power < arm5.power && arm5.power < arm10.power && arm10.power > 2.0, `${(arm0.power * 57.3).toFixed(0)}, ${(arm5.power * 57.3).toFixed(0)}, ${(arm10.power * 57.3).toFixed(0)} degrees`);
     await sim(() => { const tr = window.__sim.train; tr.throttle = 0; tr.brakeHandle = 0; tr.brakeCylinder = 0; });
 
     // ---- Headlights light the track: off, dipped, full ----
@@ -295,6 +298,21 @@ function installFakePad() {
     await tap(2); const beamFull = await beam();
     await tap(2); const beamOff2 = await beam();
     check("X: the beam is off, then dipped, then brighter on full, then off again", beamOff === 0 && beamDipped > 100 && beamFull > beamDipped * 1.5 && beamOff2 < 1, `${beamOff.toFixed(0)}, ${beamDipped.toFixed(0)}, ${beamFull.toFixed(0)}, ${beamOff2.toFixed(0)}`);
+
+    // ---- The 4 x 2 switch panel: TAIL LIGHT bottom-left; it and MARKER LIGHT really work ----
+    const switchesNow = () => sim(() => ({ tail: window.__sim.cab.parts.switches.tailLights.rotation.x, marker: window.__sim.cab.parts.switches.markerLights.rotation.x }));
+    await frames(4);
+    let sw = await switchesNow();
+    check("switch panel: tail light and marker light both start OFF (lever tipped back)", sw.tail > 0.3 && sw.marker > 0.3, JSON.stringify(sw));
+    await kb.press("KeyK"); await frames(4); sw = await switchesNow();
+    check("K: the tail light switch flips ON", sw.tail < -0.3, JSON.stringify(sw));
+    await tap(10); await frames(4); sw = await switchesNow();
+    check("L3: the tail light switch flips OFF again", sw.tail > 0.3, JSON.stringify(sw));
+    await tap(2); await frames(4); sw = await switchesNow();
+    check("headlights on (X): the marker light switch goes ON too", sw.marker < -0.3, JSON.stringify(sw));
+    await tap(2); await tap(2); await frames(4);
+    const layout = await sim(() => window.__sim.cab.layout);
+    check("switch panel is four across and two rows, with TAIL LIGHT bottom-left", layout.cols === 4 && layout.rows === 2 && layout.bottomLeft === "TAIL LIGHT", JSON.stringify(layout));
 
     // ---- Curves lean the cab, hills tip it, and straights are level ----
     const tilt = async (miles) => { await sim((m) => window.__sim.teleport(m * 1609.344), miles); await frames(4); return sim(() => ({ roll: window.__sim.camera.parent.rotation.z, pitch: window.__sim.camera.parent.rotation.x })); };
@@ -306,7 +324,7 @@ function installFakePad() {
     // ---- 4. Screenshots along the route, and the budget ----
     await sim(() => { const t = window.__sim.train; t.throttle = 0; t.brakeHandle = 0; t.brakeCylinder = 0; t.reverser = 1; t.direction = 1; t.speed_mps = 0; });
     const budget = [];
-    const stops = { start: 0.05, curve: 0.9, wood: 1.6, overbridge: 2.26, moor: 3.8, embankment: 5.5, viaduct: 5.95, wood2: 8.9, moor2: 10.5, viaduct2: 12.35, end: 13.5 };
+    const stops = { station: 0.12, curve: 0.9, crossing: 1.29, wood: 1.6, overbridge: 2.26, moor: 3.8, embankment: 5.5, viaduct: 5.95, crossing2: 9.66, wood2: 8.9, moor2: 10.5, viaduct2: 12.35, endapproach: 13.83, endstation: 13.93 };
     for (const [name, miles] of Object.entries(stops)) {
       const d = miles * 1609.344;
       await sim((d) => window.__sim.teleport(d), d);
@@ -315,7 +333,7 @@ function installFakePad() {
       const st = await stats();
       budget.push({ d, ...st });
       console.log(`     ${name} (mile ${miles}): ${st.calls} draw calls, ${st.triangles} triangles, ${st.chunks} chunks, ${st.geometries} geometries`);
-      if (["curve", "overbridge", "moor", "viaduct", "wood2"].includes(name)) await shot(`10-${name}`);
+      if (["station", "curve", "crossing", "overbridge", "moor", "viaduct", "crossing2", "wood2", "endstation"].includes(name)) await shot(`10-${name}`);
     }
     const maxCalls = Math.max(...budget.map((b) => b.calls)), maxTris = Math.max(...budget.map((b) => b.triangles));
     check("budget: draw calls under 200", maxCalls < 200, `max ${maxCalls}`);
@@ -353,6 +371,15 @@ function installFakePad() {
   }
 
   if (!smoke) {
+    // ---- Reversing: the train cannot go back through the buffers at the first station ----
+    await sim(() => { const t = window.__sim.train; t.reverser = -1; t.direction = -1; t.throttle = 0; t.brakeHandle = 0; t.brakeCylinder = 0; t.speed_mps = 15; window.__sim.teleport(90); });
+    await page.waitForFunction(() => window.__sim.train.speed_mps === 0, { timeout: 60000, polling: 100 });
+    s = await state();
+    check("reversing: the train stops at the buffers at the first station (30 m)", Math.abs(s.distance - 30) < 1.5, `distance ${s.distance.toFixed(1)} m`);
+    await sim(() => { const t = window.__sim.train; t.reverser = 1; t.direction = 1; });
+  }
+
+  if (!smoke) {
     // ---- The end of the line ----
     await page.evaluate(() => { document.querySelector(".hud").style.display = ""; });
     await sim(() => { const t = window.__sim.train; t.reverser = 1; t.direction = 1; t.throttle = 0; t.brakeHandle = 0; t.brakeCylinder = 0; t.speed_mps = 25; window.__sim.teleport(window.__sim.route.length_m - 150); });
@@ -366,7 +393,8 @@ function installFakePad() {
     await tap(0);
     await sleep(600);
     s = await state();
-    check("A drives again: back at the start, on the drive screen", s.screen === "drive" && s.distance < 50, `distance ${s.distance.toFixed(1)} m`);
+    const platformStart = await sim(() => window.__sim.route.start_m);
+    check("A drives again: back on the first platform, on the drive screen", s.screen === "drive" && Math.abs(s.distance - platformStart) < 5, `distance ${s.distance.toFixed(1)} m`);
   }
 
   // ---- 7. No errors ----

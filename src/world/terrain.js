@@ -96,7 +96,7 @@ export function boundaryType(seed, side, edgeOrBand, bucket, walls) {
 }
 
 export function createTerrain(ctx) {
-  const { path, seed, env } = ctx;
+  const { path, seed, env, route } = ctx;
   const layout = makeLayout(seed, path.totalLength_m, env);
   const here = {};
   const there = {};
@@ -199,6 +199,11 @@ export function createTerrain(ctx) {
     return boundaryType(seed, side, 20 + edge, Math.floor(d / 180), env.paramsAt(d).walls);
   }
 
+  // Footpaths cut through the hedges, and the station car parks are kept clear of them.
+  const hedgeIsBlocked = (edge, d) =>
+    route.levelCrossings.some((x) => Math.abs(d - x.at) < 4) ||
+    (edge === 1 && route.stations.some((st) => Math.abs(d - st.at) < st.platformLength_m / 2 + 20));
+
   // Adds all the ground and field boundaries between distances d0 and d1.
   function addTerrain(builder, d0, d1) {
     for (const [a, b] of rowsBetween(d0, d1)) addTrackbed(builder, a, b);
@@ -225,6 +230,7 @@ export function createTerrain(ctx) {
       // Hedges along the track between bands.
       for (const edge of HEDGE_EDGES) {
         for (const [a, b] of rowsBetween(d0, d1)) {
+          if (hedgeIsBlocked(edge, (a + b) / 2)) continue;
           addBoundary(builder, edgeType(side, edge, (a + b) / 2), groundPoint(a, EDGES_M[edge] * side), groundPoint(b, EDGES_M[edge] * side), hashRandom(seed, Math.floor(a), edge));
         }
       }

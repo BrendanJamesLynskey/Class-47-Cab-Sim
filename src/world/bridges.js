@@ -6,6 +6,7 @@
 
 import * as C from "../config.js";
 import { colour } from "./mesh-builder.js";
+import { frameAt } from "./frame.js";
 
 const TRACKBED_DROP_M = 0.65;
 const RIVER_BRIDGE_LENGTH_M = 40;
@@ -16,25 +17,16 @@ const ROAD_LENGTH_M = 90;         // the road carries on this far each side of t
 const RIVER_WIDTH_M = 14;
 const WATER_ABOVE_FLOOR_M = 0.9;
 
-// Is this distance too close to a bridge for a fence post or a telegraph pole?
-export function nearBridge(route, d) {
-  return route.bridges.some((b) => {
+// Is this distance too close to a bridge, a station or a level crossing for a fence post,
+// a telegraph pole or a milepost? (`route` is the result of routeInMetres().)
+export function nearStructure(route, d) {
+  const bridge = route.bridges.some((b) => {
     const middle = (b.from + b.to) / 2;
     return Math.abs(d - middle) < (b.kind === "river" ? RIVER_BRIDGE_ZONE_M : ROAD_BRIDGE_WIDTH_M / 2 + 1);
   });
-}
-
-// A little frame of directions at the middle of a bridge, so parts can be placed
-// "so far along the track and so far to the side".
-function frameAt(path, d) {
-  const p = path.pathAt(d, {});
-  const h = p.heading;
-  return {
-    heading: h, y: p.y,
-    at(along, lateral, up) {
-      return [p.x + Math.sin(h) * along + Math.cos(h) * lateral, p.y + up, p.z - Math.cos(h) * along + Math.sin(h) * lateral];
-    },
-  };
+  const station = route.stations.some((st) => Math.abs(d - st.at) < st.platformLength_m / 2 + 35);
+  const crossing = route.levelCrossings.some((c) => Math.abs(d - c.at) < 4);
+  return bridge || station || crossing;
 }
 
 function addRiverBridge(builder, path, terrain, middle) {

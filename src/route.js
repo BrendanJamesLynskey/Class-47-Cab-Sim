@@ -4,7 +4,7 @@
 // Every distance in this file is in MILES from the start of the line.
 // (The game turns them into metres for you, in routeInMetres() at the bottom.)
 //
-// The line winds through farmland, woods, cuttings and open moorland, with two
+// The line runs between two stations, through farmland, woods, cuttings and open moorland, with two
 // river valleys. Later versions add a village halt and a town station using the
 // empty lists at the bottom. To change the line, edit the lists. For example, to
 // add a 1-in-100 hill: { from: 2.0, to: 2.5, oneIn: 100 } in `gradients`.
@@ -18,9 +18,10 @@ export const ROUTE = {
   // What the scenery around the line is like along each stretch.
   // Types: "country" (farmland), "wood", "hills" (open moorland), "cutting" (the track
   // sinks into the ground), "embankment" (the track is raised up), "valley" (a flat
-  // river valley). "village" and "town" are for a later version.
+  // river valley), "station" (flat land round a platform). "village" and "town" are for a later version.
   environment: [
-    { from: 0.0,  to: 1.2,  type: "country" },
+    { from: 0.0,  to: 0.32, type: "station" },
+    { from: 0.32, to: 1.2,  type: "country" },
     { from: 1.2,  to: 2.0,  type: "wood" },
     { from: 2.0,  to: 2.6,  type: "cutting" },
     { from: 2.6,  to: 3.0,  type: "country" },
@@ -29,11 +30,12 @@ export const ROUTE = {
     { from: 5.6,  to: 6.6,  type: "valley" },
     { from: 6.6,  to: 8.4,  type: "country" },
     { from: 8.4,  to: 9.4,  type: "wood" },
-    { from: 9.4,  to: 10.0, type: "cutting" },
+    { from: 9.4,  to: 10.0, type: "country" },
     { from: 10.0, to: 11.6, type: "hills" },
     { from: 11.6, to: 12.1, type: "embankment" },
     { from: 12.1, to: 12.9, type: "valley" },
-    { from: 12.9, to: 14.0, type: "country" },
+    { from: 12.9, to: 13.75, type: "country" },
+    { from: 13.75, to: 14.0, type: "station" },
   ],
 
   // The speed limit that applies from each point until the next one.
@@ -49,7 +51,7 @@ export const ROUTE = {
   // real main lines are this gentle, so you barely see it, but a heavy train feels it!
   // Positive = uphill, negative = downhill.
   gradients: [
-    { from: 0.2,  to: 0.9,  oneIn: 250 },
+    { from: 0.3,  to: 0.9,  oneIn: 250 },
     { from: 1.0,  to: 1.6,  oneIn: -300 },
     { from: 2.6,  to: 3.0,  oneIn: 200 },
     { from: 3.1,  to: 4.7,  oneIn: 140 },    // the long climb onto the moor
@@ -80,18 +82,36 @@ export const ROUTE = {
   ],
 
   // Bridges. kind "river": the track crosses a river on a stone viaduct (put it in a "valley").
-  // kind "road": a road crosses over the line (put it in a "cutting").
+  // kind "road": a road crosses over the line (put it in a "cutting"). Footpaths that cross
+  // the line at track level are in `levelCrossings` below instead.
   bridges: [
     { from: 2.297, to: 2.303,  kind: "road" },
     { from: 5.988, to: 6.012,  kind: "river" },
-    { from: 9.697, to: 9.703,  kind: "road" },
     { from: 12.388, to: 12.412, kind: "river" },
   ],
 
+  // Where the train starts (in miles). It stands at the far end of the first platform.
+  startAt: 0.168,
+
+  // Stations: the line starts and ends at one. `at` is the middle of the platform; `side` says
+  // which side of the track the platform is on. Each has a modern platform with old brick buildings.
+  stations: [
+    { name: "Aldbury", at: 0.12, platformLength_m: 180, side: "left", footbridgeBeyond: true },
+    { name: "Northwick", at: 13.9385, platformLength_m: 180, side: "right", footbridgeBeyond: false },
+  ],
+
+  // Footpaths that cross the line at track level, just for people (there are no barriers:
+  // walkers open a little gate, look and listen). A whistle board a little way before each
+  // one reminds the driver to sound the horn.
+  levelCrossings: [
+    { at: 1.32, kind: "footpath" },
+    { at: 6.4,  kind: "footpath" },
+    { at: 9.7,  kind: "footpath" },   // this one used to be a road bridge over a cutting
+    { at: 12.75, kind: "footpath" },
+  ],
+
   // Later milestones fill these in:
-  stations: [],       // { name, at, platformLength_m, side: "left" or "right" }
   signals: [],        // { at, aspect: "green" | "double-yellow" | "yellow" | "red" }
-  levelCrossings: [], // { at }
   tunnels: [],        // { from, to }
 };
 
@@ -102,6 +122,7 @@ export function routeInMetres(route = ROUTE) {
   return {
     name: route.name,
     length_m: m(route.lengthMiles),
+    start_m: m(route.startAt ?? 0),
     environment: route.environment.map(range),
     speedLimits: route.speedLimits.map((s) => ({ ...s, from: m(s.from) })),
     stations: route.stations.map((s) => ({ ...s, at: m(s.at) })),

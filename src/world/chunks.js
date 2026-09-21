@@ -10,16 +10,18 @@ import { addTrack } from "./track.js";
 import { addFurniture } from "./furniture.js";
 import { addNature } from "./nature.js";
 import { addBridges } from "./bridges.js";
+import { addCrossings } from "./crossings.js";
+import { addStations } from "./stations.js";
 import { createEnvironment } from "./environment.js";
 
 export function createWorld(scene, path, route, quality) {
   const ctx = { path, route, quality, seed: C.WORLD_SEED };
   const env = createEnvironment(route, path.totalLength_m);
-  const terrain = createTerrain({ path, seed: C.WORLD_SEED, env });
+  const terrain = createTerrain({ path, seed: C.WORLD_SEED, env, route });
 
   // One shared material: it colours every triangle by its own vertex colours.
   const material = new THREE.MeshLambertMaterial({ vertexColors: true });
-  const chunks = new Map(); // chunk number -> { mesh, triangles }
+  const chunks = new Map(); // chunk number -> { mesh, triangles, extras }
   let slowestBuild_ms = 0;  // how long the slowest chunk took to build (shown in the tests)
   const lastChunk = Math.floor(path.totalLength_m / C.CHUNK_LENGTH_M);
 
@@ -29,10 +31,16 @@ export function createWorld(scene, path, route, quality) {
   const STEPS = [
     (builder, d0, d1) => terrain.addTerrain(builder, d0, d1),
     (builder, d0, d1) => addTrack(builder, ctx, d0, d1),
-    (builder, d0, d1) => { addFurniture(builder, ctx, terrain, d0, d1); addBridges(builder, ctx, terrain, d0, d1); },
+    // (`extras` collects the few signs that have writing on them: they are separate meshes.)
+    (builder, d0, d1, extras) => {
+      addFurniture(builder, ctx, terrain, d0, d1);
+      addBridges(builder, ctx, terrain, d0, d1);
+      addCrossings(builder, ctx, terrain, d0, d1);
+      addStations(builder, ctx, terrain, d0, d1, extras);
+    },
     (builder, d0, d1) => addNature(builder, ctx, terrain, d0, d1),
   ];
-  let job = null; // the chunk being built: { index, builder, step }
+  let job = null; // the chunk being built: { index, builder, extras, step }
 
   function timed(work) {
     const started = performance.now();
@@ -45,7 +53,8 @@ export function createWorld(scene, path, route, quality) {
     const mesh = new THREE.Mesh(geometry, material);
     mesh.matrixAutoUpdate = false; // it never moves, so don't waste time re-working out where it is
     scene.add(mesh);
-    chunks.set(job.index, { mesh, triangles: job.builder.triangleCount });
+    for (const extra of job.extras) scene.add(extra);
+    chunks.set(job.index, { mesh, extras: job.extras, triangles: job.builder.triangleCount });
     job = null;
   }
 
@@ -56,11 +65,11 @@ export function createWorld(scene, path, route, quality) {
       let index = first;
       while (index <= last && chunks.has(index)) index++;
       if (index > last) return false;
-      job = { index, builder: new MeshBuilder(), step: 0 };
+      job = { index, builder: new MeshBuilder(), extras: [], step: 0 };
     }
     const d0 = job.index * C.CHUNK_LENGTH_M, d1 = d0 + C.CHUNK_LENGTH_M;
     timed(() => {
-      STEPS[job.step](job.builder, d0, d1);
+      STEPS[job.step](job.builder, d0, d1, job.extras);
       job.step++;
       if (job.step === STEPS.length) finishJob();
     });
@@ -71,6 +80,7 @@ export function createWorld(scene, path, route, quality) {
     const chunk = chunks.get(index);
     scene.remove(chunk.mesh);
     chunk.mesh.geometry.dispose(); // give the graphics memory back
+    for (const extra of chunk.extras) { scene.remove(extra); extra.geometry.dispose(); }
     chunks.delete(index);
   }
 

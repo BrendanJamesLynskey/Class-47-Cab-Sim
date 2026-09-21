@@ -24,9 +24,13 @@ export { EYE_POSITION } from "./cab-layout.js";
 const degrees = (d) => (d * Math.PI) / 180;
 
 // How far each handle swings. The angle is measured round the handle's pivot, from "pointing
-// straight ahead", so bigger angles pull the handle round and back toward the driver.
-const BRAKE_ARC = { released: degrees(22), full: degrees(150) };   // swings out to the LEFT then back
-const POWER_ARC = { off: degrees(-20), full: degrees(-132) };      // swings out to the RIGHT then back
+// straight ahead" (positive = anticlockwise seen from above), so bigger angles pull the handle
+// round and back toward the driver.
+// Looking down on the desk: the brake handle turns CLOCKWISE as you pull it toward full brake,
+// and the power handle turns ANTICLOCKWISE as you pull it toward full power. Both end up
+// pulled back toward the driver, the brake on his left and the power on his right.
+const BRAKE_ARC = { released: degrees(-20), full: degrees(-150) };
+const POWER_ARC = { off: degrees(20), full: degrees(132) };
 
 // A lever arm: a metal bar with a black ball on the end, pivoting at its base, pointing
 // along -Z (forward) and rising a little. Turn it with rotation.y to swing it round.
@@ -89,6 +93,19 @@ export function createCab() {
   at(hornLever, L.HORN_LEVER.x, L.deskHeightAt(L.HORN_LEVER.z) + 0.06, L.HORN_LEVER.z);
   cab.add(brakeHandle, powerHandle, reverser, hornLever);
 
+  // The two switches that really work: TAIL LIGHT and MARKER LIGHT. Lever forward = on.
+  const switches = {};
+  for (const sw of L.SWITCHES.filter((item) => item.state)) {
+    const { x, z } = L.switchPosition(sw);
+    const B = new MeshBuilder();
+    B.addShape(CYLINDER, 0, 0.006, 0, 0.024, 0.012, 0.024, 0, 0, colour("#6a6f76"));
+    B.addBox(0, 0.03, 0, 0.008, 0.036, 0.008, 0, colour("#e8eaee"));
+    const lever = new THREE.Mesh(B.build(), new THREE.MeshLambertMaterial({ vertexColors: true }));
+    lever.position.set(x, L.deskHeightAt(z), z);
+    cab.add(lever);
+    switches[sw.state] = lever;
+  }
+
   // ---- Windscreen wipers: they hang from the top of the screen and swing side to side ----
   const wipers = [{ x: -0.7, park: 1.15, sign: -1 }, { x: 0.72, park: -1.15, sign: 1 }].map((spec) => {
     const pivot = new THREE.Group();
@@ -138,6 +155,10 @@ export function createCab() {
     hornLever.rotation.z = shown.hornRoll;
     hornLever.rotation.x = shown.hornPitch;
 
+    // The working switches: lever forward when on.
+    switches.tailLights.rotation.x = view.tailLights ? -0.55 : 0.55;
+    switches.markerLights.rotation.x = view.headlights > 0 ? -0.55 : 0.55;
+
     setLamp(lamps["POWER CUT"], view.powerCut);
     setLamp(lamps["BRAKES"], view.brakeCylinder_psi > 4);
     setLamp(lamps["HORN"], view.horn.high || view.horn.low);
@@ -158,5 +179,9 @@ export function createCab() {
     }
   }
 
-  return { group: cab, update, parts: { brakeHandle, powerHandle, reverser, hornLever, wipers, headlamp, needles } };
+  // (for the tests) how the switch panel is laid out
+  const cols = new Set(L.SWITCHES.map((sw) => sw.col)).size, rows = new Set(L.SWITCHES.map((sw) => sw.row)).size;
+  const bottomLeft = L.SWITCHES.find((sw) => sw.row === "near" && sw.col === 0).name;
+
+  return { group: cab, update, layout: { cols, rows, bottomLeft }, parts: { brakeHandle, powerHandle, reverser, hornLever, wipers, headlamp, needles, switches } };
 }

@@ -6,7 +6,7 @@ import * as C from "../config.js";
 import { pointBeside } from "../path.js";
 import { colour } from "./mesh-builder.js";
 import { milesToMetres } from "../units.js";
-import { nearBridge } from "./bridges.js";
+import { nearStructure } from "./bridges.js";
 
 const FENCE_OFFSET_M = 4.3;       // how far the fence is from the middle of the track
 const FENCE_SPACING_M = 4;        // one post every 4 m
@@ -29,7 +29,7 @@ export function addFurniture(builder, ctx, terrain, d0, d1) {
   const firstPost = Math.ceil(d0 / spacing);
   for (let k = firstPost; k * spacing < fenceEnd; k++) {
     const d = k * spacing, dNext = Math.min((k + 1) * spacing, fenceEnd);
-    if (nearBridge(route, d) || nearBridge(route, dNext)) continue;
+    if (nearStructure(route, d) || nearStructure(route, dNext)) continue;
     for (const side of [-1, 1]) {
       const a = path.pathAt(d, p);
       const base = { x: pointBeside(a, side * FENCE_OFFSET_M, {}).x, z: pointBeside(a, side * FENCE_OFFSET_M, {}).z, y: a.y - GROUND_DROP_M };
@@ -45,7 +45,7 @@ export function addFurniture(builder, ctx, terrain, d0, d1) {
   const firstPole = Math.ceil(d0 / POLE_SPACING_M);
   for (let k = firstPole; k * POLE_SPACING_M < fenceEnd; k++) {
     const a = path.pathAt(k * POLE_SPACING_M, p);
-    if (nearBridge(route, k * POLE_SPACING_M) || nearBridge(route, (k + 1) * POLE_SPACING_M)) continue;
+    if (nearStructure(route, k * POLE_SPACING_M) || nearStructure(route, (k + 1) * POLE_SPACING_M)) continue;
     const top = { ...pointBeside(a, POLE_OFFSET_M, {}) };
     const groundY = terrain.groundY(k * POLE_SPACING_M, POLE_OFFSET_M);
     builder.addBox(top.x, groundY + POLE_HEIGHT_M / 2, top.z, 0.22, POLE_HEIGHT_M, 0.22, -a.heading, wood);
@@ -66,16 +66,16 @@ export function addFurniture(builder, ctx, terrain, d0, d1) {
   for (let k = firstMilepost; k * MILEPOST_SPACING_M < fenceEnd; k++) {
     if (k === 0) continue;
     const a = path.pathAt(k * MILEPOST_SPACING_M, p);
-    if (nearBridge(route, k * MILEPOST_SPACING_M)) continue;
+    if (nearStructure(route, k * MILEPOST_SPACING_M)) continue;
     const at = pointBeside(a, MILEPOST_OFFSET_M, {});
     const groundY = terrain.groundY(k * MILEPOST_SPACING_M, MILEPOST_OFFSET_M);
     builder.addBox(at.x, groundY + 0.5, at.z, 0.28, 1.0, 0.14, -a.heading, colour("#f2f0e6"));
     builder.addBox(at.x, groundY + 1.03, at.z, 0.29, 0.14, 0.15, -a.heading, colour("#1c1c1c"));
   }
 
-  // The buffer stop at the very end of the line.
-  const endD = route.length_m;
-  if (endD >= d0 && endD < d1) {
+  // Buffer stops at the two ends of the line (both stations are terminals).
+  for (const endD of [1, route.length_m]) {
+    if (endD < d0 || endD >= d1) continue;
     const a = path.pathAt(endD, p);
     const y = a.y - 0.17;
     builder.addBox(a.x, y + 0.7, a.z, 2.6, 0.5, 0.5, -a.heading, colour("#b3282d"));   // the red beam

@@ -31,10 +31,10 @@ export const WINDSCREEN_TOP_Y = 3.5;
 export const deskHeightAt = (z) => DESK_NEAR.y + ((DESK_NEAR.z - z) * (DESK_FAR.y - DESK_NEAR.y)) / (DESK_NEAR.z - DESK_FAR.z);
 
 // The controls. (x, z) is where each stands on the desk.
-export const BRAKE_VALVE = { x: -1.0, z: -0.6 };
+export const BRAKE_VALVE = { x: -0.88, z: -0.6 };
 export const POWER_CONTROLLER = { x: -0.12, z: -0.62 };
 export const REVERSER = { x: 0.2, z: -0.62 };
-export const HORN_LEVER = { x: -0.77, z: -0.6 };
+export const HORN_LEVER = { x: -1.05, z: -0.6 };
 
 // The dials on the gauge board (x across the cab, r = radius).
 export const GAUGES = {
@@ -52,3 +52,23 @@ export const LAMPS = [
   { name: "HORN", x: 0.55, color: "#5ad0ff" },
 ];
 export const LAMP_Y = 0.045; // how far up the board the lamps sit
+
+// The little switch panel on the desk, right of the reverser: four switches across, two rows.
+// (The names are from the real Class 47 cab diagrams.) The bottom row, nearest the driver,
+// has the tail light switch on its left. `state` names the ones that really work in the game.
+export const SWITCH_COLUMNS_X = [0.47, 0.555, 0.64, 0.725];
+export const SWITCH_ROWS_Z = { far: -0.7, near: -0.56 };
+export const SWITCHES = [
+  { name: "COMPARTMENT LIGHT", row: "far", col: 0 },
+  { name: "FOOT WARMER", row: "far", col: 1 },
+  { name: "CAB HEAT DRIVER", row: "far", col: 2 },
+  { name: "CAB HEAT 2ND MAN", row: "far", col: 3 },
+  { name: "TAIL LIGHT", row: "near", col: 0, state: "tailLights" },
+  { name: "DEMISTER", row: "near", col: 1 },
+  { name: "DESK LIGHT", row: "near", col: 2 },
+  { name: "MARKER LIGHT", row: "near", col: 3, state: "markerLights" },
+];
+export const switchPosition = (sw) => ({ x: SWITCH_COLUMNS_X[sw.col], z: SWITCH_ROWS_Z[sw.row] });
+
+// How far along the desk top (from its far edge, measured up the slope) a given z is.
+export const deskAlongFromFar = (z) => ((z - DESK_FAR.z) / (DESK_NEAR.z - DESK_FAR.z)) * Math.hypot(DESK_FAR.y - DESK_NEAR.y, DESK_NEAR.z - DESK_FAR.z);

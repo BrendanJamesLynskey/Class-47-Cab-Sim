@@ -64,13 +64,6 @@ export function paintGaugeBoard() {
   // Names under the warning lamps.
   g.fillStyle = "#c8ccd0"; g.font = `bold ${px(0.014)}px sans-serif`;
   for (const lamp of L.LAMPS) g.fillText(lamp.name, cx(lamp.x), H / 2 - px(L.LAMP_Y) + px(0.04));
-  // Small switches, a plate and a hole or two on the far right of the board.
-  g.fillStyle = "#2e3136";
-  g.fillRect(cx(0.68), px(0.05), px(0.5), H - px(0.1));
-  for (let i = 0; i < 6; i++) {
-    g.fillStyle = "#0d0e10"; g.fillRect(cx(0.72 + i * 0.075), px(0.06), px(0.04), px(0.05));
-    g.fillStyle = i % 2 ? "#aeb3b8" : "#7d8288"; g.fillRect(cx(0.725 + i * 0.075), px(0.07), px(0.03), px(0.025));
-  }
   return canvas;
 }
 
@@ -110,14 +103,20 @@ export function paintDeskTop() {
   g.font = `bold ${px(0.014)}px sans-serif`; g.fillStyle = "#98a0a8";
   g.fillText("LOW", cx(L.HORN_LEVER.x - 0.05), py(0.17)); g.fillText("HIGH", cx(L.HORN_LEVER.x + 0.05), py(0.17));
 
-  // Rows of switches on the right, for the second man.
-  g.fillStyle = "#2c3036"; g.fillRect(cx(0.4), py(0.08), px(0.86), px(0.3));
-  for (let row = 0; row < 2; row++) {
-    for (let i = 0; i < 9; i++) {
-      const x = 0.46 + i * 0.09, y = 0.14 + row * 0.12;
-      g.fillStyle = "#101113"; g.fillRect(cx(x), py(y), px(0.035), px(0.05));
-      g.fillStyle = (i + row) % 3 ? "#b4b8bd" : "#e8c22a"; g.fillRect(cx(x + 0.004), py(y + 0.006), px(0.027), px(0.02));
-    }
+  // The switch panel: four across, two rows, each named underneath.
+  const columns = L.SWITCH_COLUMNS_X;
+  const near = L.deskAlongFromFar(L.SWITCH_ROWS_Z.near), far = L.deskAlongFromFar(L.SWITCH_ROWS_Z.far);
+  g.fillStyle = "#33373c"; g.fillRect(cx(columns[0] - 0.05), py(far - 0.055), px(columns[3] - columns[0] + 0.1), py(near - far + 0.115));
+  g.strokeStyle = "#5a6068"; g.lineWidth = 2; g.strokeRect(cx(columns[0] - 0.05), py(far - 0.055), px(columns[3] - columns[0] + 0.1), py(near - far + 0.115));
+  for (const sw of L.SWITCHES) {
+    const { x, z } = L.switchPosition(sw);
+    const along = L.deskAlongFromFar(z);
+    g.fillStyle = "#0d0e10"; g.fillRect(cx(x - 0.012), py(along - 0.02), px(0.024), px(0.04)); // the slot the lever moves in
+    g.fillStyle = sw.name === "TAIL LIGHT" ? "#ffd54a" : "#c8ccd0"; g.font = `bold ${px(0.0115)}px sans-serif`; g.textAlign = "center"; g.textBaseline = "middle";
+    const words = sw.name.split(" ");
+    const half = Math.ceil(words.length / 2);
+    g.fillText(words.slice(0, half).join(" "), cx(x), py(along + 0.032));
+    g.fillText(words.slice(half).join(" "), cx(x), py(along + 0.046));
   }
   return canvas;
 }

@@ -100,6 +100,7 @@ export function createControls() {
     reverserStep: 0,            // +1 = toward Forward (D-pad up / F), -1 = toward Reverse (D-pad down / R)
     awsPressed: false,          // B / Q
     headlightsPressed: false,   // X / L
+    tailLightsPressed: false,   // L3 (stick click) / K
     wipersPressed: false,       // Y / V
     pausePressed: false,        // Start / P / Esc
     recentrePressed: false,     // R3 / C
@@ -141,6 +142,7 @@ export function createControls() {
       controls.emergencyPressed = justPressed("emergency", down(BUTTON.BACK) || keyDown("emergency"), tapped("emergency"));
       controls.awsPressed = justPressed("aws", down(BUTTON.B) || keyDown("awsAcknowledge"), tapped("awsAcknowledge"));
       controls.headlightsPressed = justPressed("headlights", down(BUTTON.X) || keyDown("headlights"), tapped("headlights"));
+      controls.tailLightsPressed = justPressed("tailLights", down(BUTTON.L3) || keyDown("tailLights"), tapped("tailLights"));
       controls.wipersPressed = justPressed("wipers", down(BUTTON.Y) || keyDown("wipers"), tapped("wipers"));
       controls.pausePressed = justPressed("pause", down(BUTTON.START) || keyDown("pause"), tapped("pause"));
       controls.recentrePressed = justPressed("recentre", down(BUTTON.R3) || keyDown("recentre"), tapped("recentre"));

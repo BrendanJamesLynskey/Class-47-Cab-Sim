@@ -1,13 +1,14 @@
 # Class 47 Cab Simulator
 
 Drive a real British diesel from the driver's seat! You are in the cab of Class 47
-locomotive 47790, pulling a railtour along 14 miles of winding line: farmland, woods,
-deep cuttings, open moorland, an embankment and two river valleys with brick viaducts.
-It is a game you can change yourself.
+locomotive 47790, standing at Aldbury station, ready to pull a railtour 14 miles along a
+winding line to Northwick: farmland, woods, deep cuttings, open moorland, an embankment,
+two river valleys with brick viaducts, and footpaths that cross the line. It is a game you
+can change yourself.
 
 [Play it here](https://brendanjameslynskey.github.io/Class-47-Cab-Sim/)
 
-*(Work in progress. The village, the town and their stations are coming next.)*
+*(Work in progress. A village halt, a town station, signals and the engine sound are coming next.)*
 
 ## Start the game
 
@@ -25,7 +26,8 @@ TV changes by itself. Press `Ctrl+C` in the terminal to stop it.
 The four buttons on the front of the gamepad are your power and brake handles.
 **Triggers pull a handle back, bumpers push it forward again.** A handle stays where
 you leave it, just like the real thing. Watch the two big handles in the cab: they swing
-round toward you in a curve as you pull them.
+round toward you in a curve as you pull them. Looking down on the desk, the **power handle
+turns anticlockwise** toward full power and the **brake handle turns clockwise** toward full brake.
 
 | Gamepad (Logitech F310) | Keyboard | Does |
 |-------------------------|----------|------|
@@ -38,9 +40,10 @@ round toward you in a curve as you pull them.
 | D-pad **right** | H | **Horn: high note** (the lever tips right) |
 | **A** button | H and J together | **Horn: both notes**, the two-tone horn (the lever is pulled back) |
 | **Back** | Space | **Emergency brake!** |
-| X | L | Headlights: off, dipped, full |
+| X | L | Headlights: off, dipped, full (the marker light switch follows) |
+| Left stick click (L3) | K | Tail light switch (the little lever on the switch panel flips) |
 | Y | V | Windscreen wipers on and off |
-| Left stick | Shift + arrow keys, or drag the mouse | Look around the cab (there is a door and a window on each side) |
+| Left stick | Shift + arrow keys, or drag the mouse | Look around the cab (there is a door and a window on each side, and a switch panel on the right) |
 | Right stick click (R3) | C | Look straight ahead again |
 | Start | P or Esc | Pause |
 | B | Q | AWS button (comes in a later version) |
@@ -51,6 +54,8 @@ The switch on the back of the gamepad must be on **X**, not D.
 If it isn't, the start screen will tell you.
 
 ## How to drive a train
+
+You start standing at the end of the platform at Aldbury. Northwick, the last station, is 14 miles away.
 
 1. **Reverser to Forward.** Press D-pad up. The little yellow lever tips forward.
 2. **Let the brake off.** LB until the brake handle (on the left) points forward again.
@@ -68,7 +73,8 @@ Some hills you can hardly see, but you can *feel* them. A long, gentle climb of 
 Try 3 coaches instead of 8 (see below) and it climbs them much faster.
 
 The speed limit is 75 mph, and 60 mph round the two tight bends. Go faster and the
-limit sign flashes.
+limit sign flashes. A **whistle board** (a white sign with a black W) stands beside the line
+before each footpath crossing: sound the horn as you pass it, so walkers know a train is coming.
 
 ## Your first change: a shorter train
 
@@ -106,7 +112,7 @@ If you break something, change it back and save again.
 | [`src/path.js`](src/path.js) | Turns the route into the real shape of the track: bends ease in, the track leans, slopes are smooth |
 | [`src/audio.js`](src/audio.js) | Makes the horn sound (with Web Audio, no sound files) |
 | [`src/cab.js`](src/cab.js) | Puts the cab together and moves the needles and handles |
-| [`src/cab-layout.js`](src/cab-layout.js) | Where everything is in the cab, in metres |
+| [`src/cab-layout.js`](src/cab-layout.js) | Where everything is in the cab, in metres (including the 4 x 2 switch panel) |
 | [`src/cab-shell.js`](src/cab-shell.js) | The walls, windows, doors, blinds, desk and seats |
 | [`src/cab-panels.js`](src/cab-panels.js) | Paints the gauge board and the labels on the desk |
 | [`src/cab-parts.js`](src/cab-parts.js) | Needles, lamps and painting helpers |
@@ -118,6 +124,10 @@ If you break something, change it back and save again.
 | [`src/world/terrain.js`](src/world/terrain.js) | The ground: fields, hills, cuttings, embankments, hedges, walls |
 | [`src/world/track.js`](src/world/track.js) | The rails, sleepers and stones |
 | [`src/world/bridges.js`](src/world/bridges.js) | River viaducts and road bridges |
+| [`src/world/stations.js`](src/world/stations.js) | The two stations: modern platforms, old brick buildings, footbridges, car parks |
+| [`src/world/crossings.js`](src/world/crossings.js) | Footpath level crossings and their whistle boards |
+| [`src/world/signs.js`](src/world/signs.js) | Name boards and clocks with writing on them |
+| [`src/world/frame.js`](src/world/frame.js) | "So far along, so far to the side, so far up": a helper for placing things beside the track |
 | [`src/world/furniture.js`](src/world/furniture.js) | Fences, telegraph poles, mileposts, the buffer stop |
 | [`src/world/nature.js`](src/world/nature.js) | Trees, woods, bushes, rocks, sheep, cows and farms |
 | [`src/world/buildings.js`](src/world/buildings.js) | Houses and barns |
@@ -146,8 +156,10 @@ than 1 in 100, and 1 in 200 is barely visible. To add a bend:
 ```
 
 A bigger radius is a gentler bend. To change the scenery, edit `environment`: the types are
-`"country"`, `"wood"`, `"hills"`, `"cutting"`, `"embankment"` and `"valley"`. A `"river"`
-bridge belongs in a `"valley"` and a `"road"` bridge in a `"cutting"`.
+`"country"`, `"wood"`, `"hills"`, `"cutting"`, `"embankment"`, `"valley"` and `"station"`. A `"river"`
+bridge belongs in a `"valley"` and a `"road"` bridge in a `"cutting"`. To add a footpath
+crossing, add a line to `levelCrossings`: `{ at: 4.5, kind: "footpath" }`. Stations are in
+`stations` (each needs `"station"` scenery round it), and `startAt` says where the train starts.
 To change the speed limit half way along:
 
 ```js
@@ -214,6 +226,16 @@ This sends your changes to GitHub, and the game on the internet updates a minute
   mesh (with vertex colours) per chunk, so the same seed always gives the same countryside.
   The performance budget is about 200 draw calls and 250,000 triangles; the scenery uses about
   35 to 45 draw calls and 80,000 to 140,000 triangles at medium quality.
+- **Stations:** both are terminals with buffer stops (the train can reverse back 30 m at the start; it stops
+  itself 4.5 m before the buffers at the end). Each is a modern station (concrete platform with a yellow
+  tactile edge, lighting columns, glass shelters, name boards, a covered footbridge, a car park) that keeps
+  its old red-brick Victorian building with a cast-iron canopy, clock and chimneys. Signs with writing are
+  the only textured meshes in the world (they are separate meshes owned by their chunk).
+- **Footpath crossings** are for people only (no barriers): timber boards between the rails, a gravel path,
+  a swing gate and warning sign each side, a break in the fences and hedges, and a whistle board 350 m before.
+- **Switch panel:** the 4 x 2 layout follows the numbered legend of the real Class 47 desk: bottom row,
+  from the driver's left, tail light, demister, desk light, marker light; top row, compartment light, foot
+  warmer, cab heat (driver) and cab heat (second man). Only the tail light and marker light switches work.
 - **Headlights** are a real spotlight (`HEADLIGHT_BEAMS`) that lights the track and scenery
   ahead. In daylight they are hard to notice; try `?time=dusk` or `?time=night`. If the Pi is
   slow, `HEADLIGHT_BEAMS = false` removes the light and its per-pixel cost.

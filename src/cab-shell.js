@@ -130,9 +130,17 @@ export function buildCabShell() {
   // The horn lever's rubber boot.
   B.addShape(CONE, L.HORN_LEVER.x, deskY(L.HORN_LEVER.z) + 0.028, L.HORN_LEVER.z, 0.06, 0.055, 0.06, 0, 0, colour("#17181a"));
 
+  // ---- The switch panel: the lever switches that never move (the two that work are made in cab.js) ----
+  for (const sw of L.SWITCHES) {
+    if (sw.state) continue;
+    const { x, z } = L.switchPosition(sw);
+    B.addShape(CYLINDER, x, deskY(z) + 0.006, z, 0.024, 0.012, 0.024, 0, 0, colour("#6a6f76"));
+    B.addBox(x, deskY(z) + 0.028, z + 0.008, 0.008, 0.034, 0.008, 0, colour("#c5c9ce"), 1, 0.55);   // the lever, tipped back: off
+  }
+
   // ---- Second man's side: a radio handset, a fire extinguisher ----
-  solid(0.75, deskY(-0.55) + 0.0, -0.66, 0.95, deskY(-0.55) + 0.05, -0.5, "#e6e3d6");
-  solid(0.78, deskY(-0.55) + 0.05, -0.64, 0.92, deskY(-0.55) + 0.075, -0.52, "#efece0");
+  solid(0.9, deskY(-0.55) + 0.0, -0.66, 1.1, deskY(-0.55) + 0.05, -0.5, "#e6e3d6");
+  solid(0.93, deskY(-0.55) + 0.05, -0.64, 1.07, deskY(-0.55) + 0.075, -0.52, "#efece0");
   solid(-W, 1.7, -0.95, -W + 0.1, 2.15, -0.8, "#a83228");    // a red extinguisher, on the left wall in front of the driver
   solid(-W + 0.05, 2.15, -0.9, -W + 0.09, 2.2, -0.85, "#222");
 

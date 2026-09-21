@@ -26,6 +26,7 @@ const quality = C.QUALITY_SETTINGS[C.QUALITY] || C.QUALITY_SETTINGS.medium;
 const MAX_FRAME_S = 0.25;      // a long pause (like switching tabs) must not make the train jump
 const MAX_STEPS_PER_FRAME = 30;
 const BUFFER_STOP_GAP_M = 4.5; // the train stops this far before the end of the line (the buffers are at the end)
+const REVERSE_LIMIT_M = 30;    // and can only reverse back this far along the line (the buffers at the start station)
 const HINT_SECONDS = 3;
 const degrees = (d) => (d * Math.PI) / 180;
 
@@ -77,6 +78,7 @@ hud.setEnabled(C.SHOW_HUD);
 
 let screen = "start"; // "start" | "drive" | "paused" | "finished"
 let train = makeTrain(makeTrainParams());
+train.distance_m = route.start_m;
 let leftoverSeconds = 0;  // time not yet used up by whole physics steps
 let runSeconds = 0;
 let physicsSeconds = 0;   // how much time the physics has really simulated (the tests use this)
@@ -84,16 +86,18 @@ let hintText = "";
 let hintTimer = 0;
 let headlights = 0;       // 0 off, 1 dipped, 2 full
 let wipersOn = false;
+let tailLights = false;   // the tail light switch (nothing you can see from the cab, but the switch moves)
 let look = { yaw: 0, pitch: 0 };
 let swayClock = 0;
 
 function startRun() {
   train = makeTrain(makeTrainParams());
+  train.distance_m = route.start_m; // standing at the first platform
   leftoverSeconds = 0;
   runSeconds = 0;
   hintText = "";
   hintTimer = 0;
-  world.prime(0);
+  world.prime(route.start_m);
   screen = "drive";
 }
 
@@ -132,6 +136,7 @@ function finishedScreen() {
 function driveFrame(seconds) {
   if (controls.headlightsPressed) headlights = (headlights + 1) % 3;
   if (controls.wipersPressed) wipersOn = !wipersOn;
+  if (controls.tailLightsPressed) tailLights = !tailLights;
 
   // Buttons that go down for one moment are used straight away (a fast display might skip the physics step).
   updateHandles(train, { throttleUp: 0, throttleDown: 0, brakeUp: 0, brakeDown: 0, emergencyPressed: controls.emergencyPressed, reverserStep: controls.reverserStep }, 0);
@@ -155,7 +160,7 @@ function driveFrame(seconds) {
   runSeconds += seconds;
 
   // The ends of the line: the start (backwards) and the buffer stop.
-  if (train.distance_m < 0) { train.distance_m = 0; train.speed_mps = 0; }
+  if (train.distance_m < REVERSE_LIMIT_M) { train.distance_m = REVERSE_LIMIT_M; train.speed_mps = 0; }
   if (train.distance_m >= route.length_m - BUFFER_STOP_GAP_M) {
     train.distance_m = route.length_m - BUFFER_STOP_GAP_M;
     train.speed_mps = 0;
@@ -206,11 +211,22 @@ function updateView(seconds) {
     powerCut: train.powerCutOut,
     horn,
     wipers: wipersOn,
+    tailLights,
     headlights,
   }, seconds);
 
   camera.getWorldPosition(cameraWorld);
   sky.update(cameraWorld, p.y);
+}
+
+// "At Aldbury" while the train is beside a platform, otherwise how far to the next station.
+function nextStationText() {
+  const d = train.distance_m;
+  for (const st of route.stations) {
+    if (Math.abs(d - st.at) < st.platformLength_m / 2) return `At ${st.name}`;
+  }
+  const next = route.stations.find((st) => st.at - st.platformLength_m / 2 > d);
+  return next ? `Next: ${next.name}, ${metresToMiles(next.at - d).toFixed(1)} miles` : "";
 }
 
 function updateHud() {
@@ -221,6 +237,7 @@ function updateHud() {
     speeding: speed_mph > limit_mph + C.SPEEDING_MARGIN_MPH,
     throttle: train.throttle, brakeHandle: train.brakeHandle, reverser: train.reverser,
     distance_miles: metresToMiles(train.distance_m), length_miles: ROUTE.lengthMiles,
+    next: nextStationText(),
     hint: hintText,
     status: train.emergency ? "EMERGENCY BRAKE" : "",
   });

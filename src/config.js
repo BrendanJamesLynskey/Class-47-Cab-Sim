@@ -82,6 +82,7 @@ export const KEYS = {
   hornLow:      ["KeyJ"],
   awsAcknowledge: ["KeyQ"],
   headlights:   ["KeyL"],
+  tailLights:   ["KeyK"],
   wipers:       ["KeyV"],
   reverserForward: ["KeyF"],
   reverserReverse: ["KeyR"],

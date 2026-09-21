@@ -23,6 +23,7 @@ export const ENVIRONMENTS = {
   cutting:    { hillAmp: 20, cut: 7,    woods: 0.30, walls: 0.10, sheep: 0.3, farm: 0.00 },
   embankment: { hillAmp: 14, cut: -5.5, woods: 0.10, walls: 0.15, sheep: 0.6, farm: 0.03 },
   valley:     { hillAmp: 2.5, cut: -1,  woods: 0.08, walls: 0.05, sheep: 0.8, farm: 0.04 },
+  station:    { hillAmp: 2,   cut: 0,   woods: 0.0,  walls: 0.05, sheep: 0.0, farm: 0.00 },
 };
 export function paramsOf(type) {
   return ENVIRONMENTS[type] || ENVIRONMENTS.country;
