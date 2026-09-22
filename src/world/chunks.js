@@ -12,6 +12,8 @@ import { addNature } from "./nature.js";
 import { addBridges } from "./bridges.js";
 import { addCrossings } from "./crossings.js";
 import { addStations } from "./stations.js";
+import { addVillage } from "./village.js";
+import { addTown } from "./town.js";
 import { createEnvironment } from "./environment.js";
 
 export function createWorld(scene, path, route, quality) {
@@ -37,6 +39,8 @@ export function createWorld(scene, path, route, quality) {
       addBridges(builder, ctx, terrain, d0, d1);
       addCrossings(builder, ctx, terrain, d0, d1);
       addStations(builder, ctx, terrain, d0, d1, extras);
+      addVillage(builder, ctx, terrain, d0, d1);
+      addTown(builder, ctx, terrain, d0, d1);
     },
     (builder, d0, d1) => addNature(builder, ctx, terrain, d0, d1),
   ];

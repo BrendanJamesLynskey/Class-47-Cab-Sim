@@ -28,7 +28,9 @@ export const ROUTE = {
     { from: 3.0,  to: 5.2,  type: "hills" },
     { from: 5.2,  to: 5.6,  type: "embankment" },
     { from: 5.6,  to: 6.6,  type: "valley" },
-    { from: 6.6,  to: 8.4,  type: "country" },
+    { from: 6.6,  to: 6.72, type: "country" },
+    { from: 6.72, to: 6.78, type: "station" },   // Foxlow Halt
+    { from: 6.78, to: 8.4,  type: "country" },
     { from: 8.4,  to: 9.4,  type: "wood" },
     { from: 9.4,  to: 10.0, type: "country" },
     { from: 10.0, to: 11.6, type: "hills" },
@@ -96,16 +98,31 @@ export const ROUTE = {
   // Stations: the line starts and ends at one. `at` is the middle of the platform; `side` says
   // which side of the track the platform is on. Each has a modern platform with old brick buildings.
   stations: [
-    { name: "Aldbury", at: 0.12, platformLength_m: 180, side: "left", footbridgeBeyond: true },
-    { name: "Northwick", at: 13.9385, platformLength_m: 180, side: "right", footbridgeBeyond: false },
+    { name: "Aldbury", at: 0.12, platformLength_m: 180, side: "left", footbridgeBeyond: true, kind: "terminus" },
+    { name: "Foxlow Halt", at: 6.75, platformLength_m: 40, side: "left", kind: "halt" },
+    { name: "Northwick", at: 13.9385, platformLength_m: 180, side: "right", footbridgeBeyond: false, kind: "terminus",
+      stopMarkerAt: 13.9907 },   // termini differ from through stations: the target is close to
+                                  // the buffers, not the platform's middle, so the whole platform is used
   ],
+
+  // The village round the halt: `at` is roughly its centre, `side` says which side of the
+  // track the church, pub and cottages mostly stand on (the OTHER side from the platform,
+  // so the level crossing has somewhere to lead to).
+  villages: [{ at: 6.7, side: "right" }],
+
+  // The stretch of line dressed as a town, approaching the main station: terraced houses,
+  // a mill, a gasworks and warehouses. `side` is which side the main street is on.
+  towns: [{ from: 12.9, to: 13.7, side: "left" }],
 
   // Footpaths that cross the line at track level, just for people (there are no barriers:
   // walkers open a little gate, look and listen). A whistle board a little way before each
   // one reminds the driver to sound the horn.
+  // "footpath" crossings are for walkers only (a gate each side, no barriers). "road" is a
+  // proper road crossing with gates that swing shut, warning lights and a cattle grid either
+  // side (for the village, where a lane meets the line).
   levelCrossings: [
     { at: 1.32, kind: "footpath" },
-    { at: 6.4,  kind: "footpath" },
+    { at: 6.65, kind: "road" },       // the village level crossing
     { at: 9.7,  kind: "footpath" },   // this one used to be a road bridge over a cutting
     { at: 12.75, kind: "footpath" },
   ],
@@ -125,7 +142,9 @@ export function routeInMetres(route = ROUTE) {
     start_m: m(route.startAt ?? 0),
     environment: route.environment.map(range),
     speedLimits: route.speedLimits.map((s) => ({ ...s, from: m(s.from) })),
-    stations: route.stations.map((s) => ({ ...s, at: m(s.at) })),
+    stations: route.stations.map((s) => ({ ...s, at: m(s.at), stopMarkerAt_m: m(s.stopMarkerAt ?? s.at) })),
+    villages: (route.villages ?? []).map((v) => ({ ...v, at: m(v.at) })),
+    towns: (route.towns ?? []).map((t) => ({ ...t, from: m(t.from), to: m(t.to) })),
     signals: route.signals.map((s) => ({ ...s, at: m(s.at) })),
     gradients: route.gradients.map((g) => ({ ...range(g), slope: 1 / g.oneIn })),
     curves: route.curves.map((c) => ({ ...range(c), curvature_per_m: (c.direction === "left" ? -1 : 1) / c.radius_m })),

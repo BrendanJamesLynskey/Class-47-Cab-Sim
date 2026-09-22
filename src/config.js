@@ -56,6 +56,18 @@ export const HEADLIGHT_DIPPED = 150;     // how bright the dipped beam is
 export const HEADLIGHT_FULL = 340;      // how bright the full beam is
 export const HEADLIGHT_RANGE_M = 260;   // how far the beam reaches
 
+// ---- Scoring: how well you stop at a station ----
+// distance_m below is how far the front of the locomotive ends up from the stop marker,
+// whichever way (stopping short and running past are treated the same).
+export const STOP_PERFECT_M = 5;      // within this: "Perfect"
+export const STOP_GOOD_M = 15;        // within this: "Good"
+export const STOP_OK_M = 30;          // within this: "OK". Further than that: "Missed"
+export const STOP_ATTEMPT_WINDOW_M = 60; // you must come to rest this close to a station for it to count as an attempt at all
+export const STOP_PERFECT_POINTS = 100;
+export const STOP_GOOD_POINTS = 60;
+export const STOP_OK_POINTS = 25;
+export const STOP_MISSED_POINTS = 0;
+
 // ---- Speed limit ----
 export const SPEEDING_MARGIN_MPH = 0.5; // how far over the limit before the HUD limit starts to flash
 

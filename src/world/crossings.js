@@ -1,15 +1,22 @@
-// crossings.js — footpath level crossings: a path across the line at track level, just
-// for people. There are no barriers: walkers open a little gate on each side, look and
-// listen. A whistle board stands beside the line before each crossing, to remind the
-// driver to sound the horn (D-pad left and right, or A).
+// crossings.js — level crossings. Two kinds:
+//   "footpath": just for walkers. No barriers: a gate each side, and you look and listen.
+//   "road": a lane crosses the line. Gates swing shut across the road, with amber warning
+//           lights, and a car or two waits while a train goes through.
+// A whistle board stands beside the line before every crossing, to remind the driver to
+// sound the horn (D-pad left and right, or A).
 
 import * as C from "../config.js";
-import { colour } from "./mesh-builder.js";
+import { colour, CYLINDER } from "./mesh-builder.js";
+import { addCar, carColor } from "./buildings.js";
+import { hashRandom } from "./random.js";
 import { frameAt } from "./frame.js";
 
 const PATH_WIDTH_M = 1.7;
-const PATH_LENGTH_M = 21;      // the path runs this far each side of the track, to the first hedge
-const GATE_LATERAL_M = 4.5;    // the gates stand this far from the middle of the track
+const PATH_LENGTH_M = 21;      // the footpath runs this far each side of the track, to the first hedge
+const GATE_LATERAL_M = 4.5;    // the footpath gates stand this far from the middle of the track
+const ROAD_WIDTH_M = 5.2;
+const ROAD_LENGTH_M = 26;      // the road runs this far each side before it's built by the town/village instead
+const BARRIER_LATERAL_M = 3.6; // the road barriers stand this far from the middle of the track
 const WHISTLE_BOARD_BEFORE_M = 350;
 
 function addWhistleBoard(builder, path, terrain, d) {
@@ -28,15 +35,8 @@ function addWhistleBoard(builder, path, terrain, d) {
   }
 }
 
-// Adds every footpath crossing whose middle falls between d0 and d1 (each is built by one chunk),
-// and the whistle boards that stand before them.
-export function addCrossings(builder, ctx, terrain, d0, d1) {
-  const { path } = ctx;
-  for (const crossing of ctx.route.levelCrossings) {
-    const c = crossing.at;
-    if (c - WHISTLE_BOARD_BEFORE_M >= d0 && c - WHISTLE_BOARD_BEFORE_M < d1) addWhistleBoard(builder, path, terrain, c - WHISTLE_BOARD_BEFORE_M);
-    if (c < d0 || c >= d1) continue;
-
+function addFootpathCrossing(builder, ctx, terrain, crossing, c) {
+    const { path } = ctx;
     const f = frameAt(path, c);
     const yaw = -f.heading;
     const timber = colour("#6a5a46"), gravel = colour("#9a9382");
@@ -85,5 +85,77 @@ export function addCrossings(builder, ctx, terrain, d0, d1) {
       [x, y, z] = f.at(signAlong, side * (GATE_LATERAL_M + 0.15 - 0.085), groundAtGate + 1.55);
       builder.addBox(x, y, z, 0.03, 0.13, 0.75, yaw, colour("#141414"));
     }
+}
+
+// A road crossing: the road surface between and beside the rails, lifting barriers with
+// warning lights, and (usually) a car or two waiting for the train to pass.
+//
+// Like the footpath crossing above, positions are given as frame.at(along, lateral, up):
+// `along` moves a little way ALONG the track (this is the ROAD'S WIDTH direction, since the
+// road crosses the rails at right angles) and `lateral` moves OUT INTO THE FIELD on one side
+// of the track or the other (this is the direction the road actually runs).
+function addRoadCrossing(builder, ctx, terrain, crossing, c, seed) {
+  const { path } = ctx;
+  const f = frameAt(path, c);
+  const yaw = -f.heading;
+  const timber = colour("#5a5148"), plank = colour("#463f38"), tarmac = colour("#4a4c50"), white = colour("#e8e6da");
+  const half = ROAD_WIDTH_M / 2;
+
+  // The road deck across the rails: timber boards, flush with the railheads.
+  let [x, y, z] = f.at(0, 0, -0.02);
+  builder.addBox(x, y, z, ROAD_WIDTH_M, 0.1, 1.9, yaw, timber, 0.95);
+  for (const lateral of [-2.0, -1.3, 1.3, 2.0]) {
+    [x, y, z] = f.at(0, lateral, -0.02);
+    builder.addBox(x, y, z, 0.5, 0.11, 1.9, yaw, plank); // guides the wheels past each rail
+  }
+
+  // The tarmac road, running away from the crossing on both sides, following the ground.
+  for (const side of [-1, 1]) {
+    const corner = (along, awayFromTrack) => {
+      const p = f.at(along, side * awayFromTrack, 0);
+      return [p[0], terrain.groundY(c + along, side * awayFromTrack) + 0.06, p[2]];
+    };
+    const steps = [1.1, 4, 9, 15, 22, ROAD_LENGTH_M];
+    for (let i = 0; i < steps.length - 1; i++) {
+      builder.addQuad(corner(-half, steps[i]), corner(half, steps[i]), corner(half, steps[i + 1]), corner(-half, steps[i + 1]), tarmac, 0.95 + 0.05 * (i % 2));
+    }
+    builder.addQuad(corner(-half + 0.2, 1.6), corner(half - 0.2, 1.6), corner(half - 0.2, 1.9), corner(-half + 0.2, 1.9), white, 1.1); // a "give way" line
+  }
+
+  // The barriers: a post at one edge of the road on each approach, with a striped arm
+  // swinging across the whole road (drawn down, as if a train were due), and a warning light.
+  for (const side of [-1, 1]) {
+    const postAlong = half + 0.35, lateral = side * BARRIER_LATERAL_M;
+    [x, y, z] = f.at(postAlong, lateral, 1.0);
+    builder.addBox(x, y, z, 0.16, 2.0, 0.16, yaw, colour("#e8e6da"));
+    const armLength = ROAD_WIDTH_M + 0.3;
+    [x, y, z] = f.at(postAlong - armLength / 2, lateral, 0.55);
+    builder.addBox(x, y, z, 0.1, 0.08, armLength, yaw, colour("#f0c218"));
+    [x, y, z] = f.at(postAlong, lateral, 1.85);
+    builder.addShape(CYLINDER, x, y, z, 0.14, 0.14, 0.14, 0, Math.PI / 2, colour("#c62a2a"));
+  }
+
+  // One or two cars waiting on the approaches (not always: sometimes the road is empty).
+  for (const side of [-1, 1]) {
+    const r = hashRandom(seed + 31, Math.round(c), side + 2);
+    if (r > 0.55) continue; // usually there's no traffic right at this moment
+    const away = 5 + hashRandom(seed + 32, Math.round(c), side) * 3;
+    const p = f.at(0, side * away, 0);
+    const ground = terrain.groundY(c, side * away);
+    const carYaw = yaw + (side > 0 ? Math.PI : 0); // facing the crossing, waiting
+    addCar(builder, p[0], ground, p[2], carYaw, carColor(hashRandom(seed + 33, Math.round(c), side)));
+  }
+}
+
+// Adds every crossing whose middle falls between d0 and d1 (each is built by one chunk),
+// and the whistle boards that stand before them.
+export function addCrossings(builder, ctx, terrain, d0, d1) {
+  const { path, seed } = ctx;
+  for (const crossing of ctx.route.levelCrossings) {
+    const c = crossing.at;
+    if (c - WHISTLE_BOARD_BEFORE_M >= d0 && c - WHISTLE_BOARD_BEFORE_M < d1) addWhistleBoard(builder, path, terrain, c - WHISTLE_BOARD_BEFORE_M);
+    if (c < d0 || c >= d1) continue;
+    if (crossing.kind === "road") addRoadCrossing(builder, ctx, terrain, crossing, c, seed);
+    else addFootpathCrossing(builder, ctx, terrain, crossing, c);
   }
 }

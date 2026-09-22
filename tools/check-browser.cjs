@@ -60,7 +60,11 @@ function installFakePad() {
   const setPad = (mode) => page.evaluate((m) => { window.__pad.mode = m; }, mode);
   const press = (index, value = 1) => page.evaluate((i, v) => { const b = window.__pad.pad.buttons[i]; b.pressed = v > 0; b.value = v; }, index, value);
   const release = (index) => press(index, 0);
-  const tap = async (index) => { await press(index); await sleep(250); await release(index); await sleep(250); };
+  // Waits for real, rendered frames rather than wall-clock time: under load (a heavier scene,
+  // a busy CPU) a fixed sleep() can elapse without the page's own loop ever having polled the
+  // pad while the button was down, and the tap is silently missed. frames() guarantees the
+  // press is actually observed.
+  const tap = async (index) => { await press(index); await frames(4); await release(index); await frames(4); };
   const sim = (fn, ...a) => page.evaluate(`(${fn.toString()})(...${JSON.stringify(a)})`);
   const state = () => sim(() => ({
     screen: window.__sim.screen, t: window.__sim.physicsSeconds, throttle: window.__sim.train.throttle,
@@ -324,7 +328,7 @@ function installFakePad() {
     // ---- 4. Screenshots along the route, and the budget ----
     await sim(() => { const t = window.__sim.train; t.throttle = 0; t.brakeHandle = 0; t.brakeCylinder = 0; t.reverser = 1; t.direction = 1; t.speed_mps = 0; });
     const budget = [];
-    const stops = { station: 0.12, curve: 0.9, crossing: 1.29, wood: 1.6, overbridge: 2.26, moor: 3.8, embankment: 5.5, viaduct: 5.95, crossing2: 9.66, wood2: 8.9, moor2: 10.5, viaduct2: 12.35, endapproach: 13.83, endstation: 13.93 };
+    const stops = { station: 0.12, curve: 0.9, crossing: 1.29, wood: 1.6, overbridge: 2.26, moor: 3.8, embankment: 5.5, viaduct: 5.95, village: 6.68, halt: 6.75, crossing2: 9.66, wood2: 8.9, moor2: 10.5, viaduct2: 12.35, town: 13.2, endapproach: 13.83, endstation: 13.93 };
     for (const [name, miles] of Object.entries(stops)) {
       const d = miles * 1609.344;
       await sim((d) => window.__sim.teleport(d), d);
@@ -333,7 +337,7 @@ function installFakePad() {
       const st = await stats();
       budget.push({ d, ...st });
       console.log(`     ${name} (mile ${miles}): ${st.calls} draw calls, ${st.triangles} triangles, ${st.chunks} chunks, ${st.geometries} geometries`);
-      if (["station", "curve", "crossing", "overbridge", "moor", "viaduct", "crossing2", "wood2", "endstation"].includes(name)) await shot(`10-${name}`);
+      if (["station", "curve", "crossing", "overbridge", "moor", "viaduct", "village", "halt", "crossing2", "wood2", "town", "endstation"].includes(name)) await shot(`10-${name}`);
     }
     const maxCalls = Math.max(...budget.map((b) => b.calls)), maxTris = Math.max(...budget.map((b) => b.triangles));
     check("budget: draw calls under 200", maxCalls < 200, `max ${maxCalls}`);
@@ -371,6 +375,28 @@ function installFakePad() {
   }
 
   if (!smoke) {
+    // ---- Stop scoring: stopping close to a marker scores it; the toast and results show it ----
+    // A fresh start() clears the score tracker: earlier tests (the streaming walk) teleport all
+    // over the route with speed pinned at 0, which can incidentally "stop" the train right by
+    // Northwick's marker and score it as a side effect — never mind that here, start clean.
+    await sim(() => window.__sim.start());
+    await page.evaluate(() => { document.querySelector(".hud").style.display = ""; });
+    const haltMarker = await sim(() => window.__sim.route.stations[1].stopMarkerAt_m);
+    await sim((m) => {
+      const s = window.__sim, t = s.train;
+      s.teleport(m - 3);
+      t.reverser = 1; t.direction = 1; t.throttle = 0; t.brakeHandle = 0; t.brakeCylinder = 0; t.speed_mps = 0;
+    }, haltMarker);
+    await frames(6);
+    let tracker = await sim(() => window.__sim.scoreTracker);
+    check("stopping 3 m from the halt's marker scores it Perfect", tracker.stations[0].scored && tracker.stations[0].label === "Perfect", JSON.stringify(tracker.stations[0]));
+    check("the HUD shows a toast for the stop", /Perfect stop at Foxlow Halt/.test(await hud()), await hud());
+    check("the journey has not ended yet (the halt isn't the last station)", (await state()).screen === "drive");
+    await sim(() => { const t = window.__sim.train; t.speed_mps = 5; }); // move on so we don't re-trigger anything at the halt
+    await frames(3);
+  }
+
+  if (!smoke) {
     // ---- Reversing: the train cannot go back through the buffers at the first station ----
     await sim(() => { const t = window.__sim.train; t.reverser = -1; t.direction = -1; t.throttle = 0; t.brakeHandle = 0; t.brakeCylinder = 0; t.speed_mps = 15; window.__sim.teleport(90); });
     await page.waitForFunction(() => window.__sim.train.speed_mps === 0, { timeout: 60000, polling: 100 });
@@ -388,13 +414,18 @@ function installFakePad() {
     s = await state();
     check("buffer stop: the train is stopped just before the end of the line", s.speed === 0 && s.distance > routeEnd - 12 && s.distance < routeEnd, `distance ${s.distance.toFixed(0)} m of ${routeEnd.toFixed(0)}`);
     await sleep(800);
-    check("the end-of-line screen is showing", /End of the line/.test(await overlayText()));
-    await shot("14-end-of-line");
+    const results = await overlayText();
+    check("the results screen is showing", /Results/.test(results));
+    check("the results screen lists Northwick, scored", /Northwick: (Perfect|Good|OK|Missed)/.test(results), results);
+    check("the results screen gives a total", /Total: \d+ points/.test(results), results);
+    await shot("14-results");
     await tap(0);
     await sleep(600);
     s = await state();
     const platformStart = await sim(() => window.__sim.route.start_m);
     check("A drives again: back on the first platform, on the drive screen", s.screen === "drive" && Math.abs(s.distance - platformStart) < 5, `distance ${s.distance.toFixed(1)} m`);
+    const freshTracker = await sim(() => window.__sim.scoreTracker);
+    check("driving again resets the score tracker", freshTracker.stations.every((st) => !st.scored), JSON.stringify(freshTracker));
   }
 
   // ---- 7. No errors ----

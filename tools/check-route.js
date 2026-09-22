@@ -90,6 +90,8 @@ export function findProblems(route) {
     if (!(s.at > 0 && s.at < length)) fail(`stations[${i}] (${s.name}) is not inside the line`);
     if (start < previousPlatformEnd) fail(`stations[${i}] (${s.name}) overlaps the station before it`);
     if (s.side !== "left" && s.side !== "right") fail(`stations[${i}] (${s.name}): side must be "left" or "right"`);
+    if (s.kind && s.kind !== "terminus" && s.kind !== "halt") fail(`stations[${i}] (${s.name}): kind must be "terminus" or "halt"`);
+    if (s.stopMarkerAt !== undefined && milesToMetres(Math.abs(s.stopMarkerAt - s.at)) > s.platformLength_m / 2) fail(`stations[${i}] (${s.name}): stopMarkerAt is outside the platform`);
     previousPlatformEnd = end;
   });
 
@@ -117,6 +119,17 @@ export function findProblems(route) {
     const platform = route.stations.find((st) => Math.abs(l.at - st.at) * milesToM < st.platformLength_m / 2 + MIN_CROSSING_CLEAR_M);
     if (platform) fail(`levelCrossings[${i}] is too close to the platform at ${platform.name}`);
     if (route.levelCrossings.find((other, j) => j !== i && Math.abs(other.at - l.at) * milesToM < 300)) fail(`levelCrossings[${i}] is within 300 m of another crossing`);
+    if (l.kind !== "footpath" && l.kind !== "road") fail(`levelCrossings[${i}]: kind must be "footpath" or "road"`);
+  });
+
+  // Villages (a point) and towns (a stretch): must be on the line, and towns must be well formed.
+  (route.villages ?? []).forEach((v, i) => {
+    if (!(v.at > 0 && v.at < length)) fail(`villages[${i}] is not inside the line`);
+    if (v.side !== "left" && v.side !== "right") fail(`villages[${i}]: side must be "left" or "right"`);
+  });
+  checkRanges("towns", route.towns ?? []);
+  (route.towns ?? []).forEach((t, i) => {
+    if (t.side !== "left" && t.side !== "right") fail(`towns[${i}]: side must be "left" or "right"`);
   });
 
   // Signals and level crossings must not be inside a platform.
@@ -198,6 +211,10 @@ expectProblem("a footpath crossing on a bend", (r) => (r.levelCrossings = [{ at:
 expectProblem("a footpath crossing in a cutting", (r) => (r.levelCrossings = [{ at: 2.3, kind: "footpath" }]));
 expectProblem("a start position off the platform", (r) => (r.startAt = 0.5));
 expectProblem("a station in the wrong scenery", (r) => (r.stations = [{ name: "X", at: 3.5, platformLength_m: 180, side: "left" }]));
+expectProblem("a stop marker off the end of its platform", (r) => { r.stations = structuredClone(r.stations); r.stations[0].stopMarkerAt = r.stations[0].at + 1; });
+expectProblem("a station with a bad kind", (r) => { r.stations = structuredClone(r.stations); r.stations[0].kind = "shed"; });
+expectProblem("a level crossing with a bad kind", (r) => { r.levelCrossings = structuredClone(r.levelCrossings); r.levelCrossings[0].kind = "ford"; });
+expectProblem("a village off the line", (r) => (r.villages = [{ at: 99, side: "left" }]));
 expectProblem("a curve that is too tight", (r) => (r.curves = [{ from: 1, to: 1.2, radius_m: 200, direction: "left" }]));
 
 // ---- 3. Does the track shape come out right? (checked against known geometry) ----

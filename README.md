@@ -3,12 +3,13 @@
 Drive a real British diesel from the driver's seat! You are in the cab of Class 47
 locomotive 47790, standing at Aldbury station, ready to pull a railtour 14 miles along a
 winding line to Northwick: farmland, woods, deep cuttings, open moorland, an embankment,
-two river valleys with brick viaducts, and footpaths that cross the line. It is a game you
-can change yourself.
+two river valleys with brick viaducts, a village with a little halt and a level crossing
+with gates, and a town of terraced streets before the main station. Stop your train beside
+the marker at each station and see how close you got. It is a game you can change yourself.
 
 [Play it here](https://brendanjameslynskey.github.io/Class-47-Cab-Sim/)
 
-*(Work in progress. A village halt, a town station, signals and the engine sound are coming next.)*
+*(Work in progress. Speed-limit and signal scoring, passenger comfort and the engine sound are coming next.)*
 
 ## Start the game
 
@@ -72,9 +73,18 @@ Some hills you can hardly see, but you can *feel* them. A long, gentle climb of 
 1 foot in 140 slows a heavy train from 87 mph to about 68 mph, even at full power.
 Try 3 coaches instead of 8 (see below) and it climbs them much faster.
 
+**Stop at the stations.** Foxlow Halt (a small village stop) and Northwick (the end of the
+line) both have a black-and-yellow **stop marker** on a post. Bring the front of the
+locomotive to a stand beside it: within 5 m is **Perfect**, within 15 m is **Good**, within
+30 m is **OK**, and further than that is **Missed**. A message flashes up on the HUD when
+you score a stop, and the journey ends with a **results screen** once you stop at Northwick,
+however close you got.
+
 The speed limit is 75 mph, and 60 mph round the two tight bends. Go faster and the
 limit sign flashes. A **whistle board** (a white sign with a black W) stands beside the line
-before each footpath crossing: sound the horn as you pass it, so walkers know a train is coming.
+before each footpath crossing: sound the horn as you pass it, so walkers know a train is
+coming. The village has a proper **road crossing** instead, with gates and lights — you
+might see a car or two waiting for you to pass.
 
 ## Your first change: a shorter train
 
@@ -96,6 +106,7 @@ More things to try in the same file:
 - `BRAKE_APPLY_LAG_S`: make the brakes slower or quicker to bite
 - `CAB_SWAY_M`: set to `0` for a perfectly smooth cab, or `0.02` for a very bumpy one
 - `CANT_PER_CURVATURE`: how much the train leans into bends (`0` = not at all)
+- `STOP_PERFECT_M`: how close counts as a "Perfect" stop (try making it stricter!)
 
 If you break something, change it back and save again.
 
@@ -111,6 +122,7 @@ If you break something, change it back and save again.
 | [`src/route.js`](src/route.js) | The railway line, written as a list. Add hills, bends, bridges, scenery and speed limits here |
 | [`src/path.js`](src/path.js) | Turns the route into the real shape of the track: bends ease in, the track leans, slopes are smooth |
 | [`src/audio.js`](src/audio.js) | Makes the horn sound (with Web Audio, no sound files) |
+| [`src/scoring.js`](src/scoring.js) | Marks how close you stopped to each station's marker |
 | [`src/cab.js`](src/cab.js) | Puts the cab together and moves the needles and handles |
 | [`src/cab-layout.js`](src/cab-layout.js) | Where everything is in the cab, in metres (including the 4 x 2 switch panel) |
 | [`src/cab-shell.js`](src/cab-shell.js) | The walls, windows, doors, blinds, desk and seats |
@@ -124,8 +136,10 @@ If you break something, change it back and save again.
 | [`src/world/terrain.js`](src/world/terrain.js) | The ground: fields, hills, cuttings, embankments, hedges, walls |
 | [`src/world/track.js`](src/world/track.js) | The rails, sleepers and stones |
 | [`src/world/bridges.js`](src/world/bridges.js) | River viaducts and road bridges |
-| [`src/world/stations.js`](src/world/stations.js) | The two stations: modern platforms, old brick buildings, footbridges, car parks |
-| [`src/world/crossings.js`](src/world/crossings.js) | Footpath level crossings and their whistle boards |
+| [`src/world/stations.js`](src/world/stations.js) | The termini and the halt: platforms, buildings, the stop marker |
+| [`src/world/village.js`](src/world/village.js) | The village round the halt: a church, a pub, cottages on a lane |
+| [`src/world/town.js`](src/world/town.js) | The town before the main station: terraces, a mill, a gasholder, warehouses, allotments |
+| [`src/world/crossings.js`](src/world/crossings.js) | Footpath and road level crossings, and the whistle boards before them |
 | [`src/world/signs.js`](src/world/signs.js) | Name boards and clocks with writing on them |
 | [`src/world/frame.js`](src/world/frame.js) | "So far along, so far to the side, so far up": a helper for placing things beside the track |
 | [`src/world/furniture.js`](src/world/furniture.js) | Fences, telegraph poles, mileposts, the buffer stop |
@@ -136,6 +150,7 @@ If you break something, change it back and save again.
 | [`src/world/random.js`](src/world/random.js) | "Random" numbers that give the same countryside every time |
 | [`tools/check-physics.js`](tools/check-physics.js) | Checks the train behaves like a real one |
 | [`tools/check-route.js`](tools/check-route.js) | Checks the route makes sense |
+| [`tools/check-scoring.js`](tools/check-scoring.js) | Checks the stop-marker scoring works |
 | [`tools/check-browser.cjs`](tools/check-browser.cjs) | Plays the game in a hidden browser with a pretend gamepad |
 
 ## Build your own route
@@ -157,10 +172,14 @@ than 1 in 100, and 1 in 200 is barely visible. To add a bend:
 
 A bigger radius is a gentler bend. To change the scenery, edit `environment`: the types are
 `"country"`, `"wood"`, `"hills"`, `"cutting"`, `"embankment"`, `"valley"` and `"station"`. A `"river"`
-bridge belongs in a `"valley"` and a `"road"` bridge in a `"cutting"`. To add a footpath
-crossing, add a line to `levelCrossings`: `{ at: 4.5, kind: "footpath" }`. Stations are in
-`stations` (each needs `"station"` scenery round it), and `startAt` says where the train starts.
-To change the speed limit half way along:
+bridge belongs in a `"valley"` and a `"road"` bridge in a `"cutting"`. To add a crossing, add a line
+to `levelCrossings`: `{ at: 4.5, kind: "footpath" }` for walkers, or `kind: "road"` for a lane with
+gates. Stations are in `stations` (each needs `"station"` scenery round it, and `kind: "halt"` for
+a small unstaffed stop like Foxlow's instead of a full terminus); `startAt` says where the train
+starts, and a station's optional `stopMarkerAt` moves its scored stop marker away from the
+platform's middle (Northwick's is near the buffers, so the whole platform gets used). `villages`
+and `towns` add the little settlements: a village is one point (`{ at, side }`), a town is a
+stretch (`{ from, to, side }`). To change the speed limit half way along:
 
 ```js
 speedLimits: [{ from: 0, mph: 75 }, { from: 3, mph: 40 }],
@@ -226,13 +245,23 @@ This sends your changes to GitHub, and the game on the internet updates a minute
   mesh (with vertex colours) per chunk, so the same seed always gives the same countryside.
   The performance budget is about 200 draw calls and 250,000 triangles; the scenery uses about
   35 to 45 draw calls and 80,000 to 140,000 triangles at medium quality.
-- **Stations:** both are terminals with buffer stops (the train can reverse back 30 m at the start; it stops
-  itself 4.5 m before the buffers at the end). Each is a modern station (concrete platform with a yellow
-  tactile edge, lighting columns, glass shelters, name boards, a covered footbridge, a car park) that keeps
-  its old red-brick Victorian building with a cast-iron canopy, clock and chimneys. Signs with writing are
-  the only textured meshes in the world (they are separate meshes owned by their chunk).
-- **Footpath crossings** are for people only (no barriers): timber boards between the rails, a gravel path,
-  a swing gate and warning sign each side, a break in the fences and hedges, and a whistle board 350 m before.
+- **Stations:** Aldbury and Northwick are terminals with buffer stops (the train can reverse back 30 m at
+  the start; a hard safety stop 1.5 m short of the buffers at the end stops you running through them, but
+  the real target is the stop marker — see Scoring below). Each is a modern station (concrete platform with
+  a yellow tactile edge, lighting columns, glass shelters, name boards, a covered footbridge, a car park)
+  that keeps its old red-brick Victorian building with a cast-iron canopy, clock and chimneys. Foxlow Halt
+  is much simpler: a short, narrow, low platform, a timber shelter, one lamp and a nameboard on a post — no
+  building, footbridge or car park. Signs with writing are the only textured meshes in the world (they are
+  separate meshes owned by their chunk).
+- **Scoring** (`src/scoring.js`, pure and unit-tested): every station after the first (so Foxlow Halt and
+  Northwick) can be scored once. While the train is at rest, the first un-scored station within 60 m of it
+  is scored by how far the front of the locomotive is from its stop marker: Perfect (≤5 m), Good (≤15 m),
+  OK (≤30 m), or Missed. A HUD message announces it, and the journey ends with a results screen once
+  Northwick is scored, however close you got. Speed-limit scoring, comfort and signals are still to come.
+- **Level crossings:** footpath ones are for people only (no barriers): timber boards between the rails, a
+  gravel path, a swing gate and warning sign each side, a break in the fences and hedges, and a whistle
+  board 350 m before. The village has a road crossing instead: a wider timber deck, barriers that swing
+  down across the road with a red warning light, and sometimes a car or two waiting.
 - **Switch panel:** the 4 x 2 layout follows the numbered legend of the real Class 47 desk: bottom row,
   from the driver's left, tail light, demister, desk light, marker light; top row, compartment light, foot
   warmer, cab heat (driver) and cab heat (second man). Only the tail light and marker light switches work.
@@ -240,9 +269,10 @@ This sends your changes to GitHub, and the game on the internet updates a minute
   ahead. In daylight they are hard to notice; try `?time=dusk` or `?time=night`. If the Pi is
   slow, `HEADLIGHT_BEAMS = false` removes the light and its per-pixel cost.
 - Choices made where the brief was silent: the HUD toggle is **T** (H is the horn); the
-  train stops automatically 4.5 m before the buffers at the end of the line; the
   reverser can be moved in reverse and the train will run backwards (the camera keeps
-  looking down the line); the horn works on D-pad left/right as well as the A button.
+  looking down the line); the horn works on D-pad left/right as well as the A button; the
+  stop-marker thresholds and points (`STOP_PERFECT_M` and friends in `config.js`) are a
+  first guess at values that feel fair, not from any official source.
 - The gamepad is read directly with the browser Gamepad API, every frame, in
   [`src/controls.js`](src/controls.js): "standard" mapping, 0.15 stick deadzone, analogue
   triggers (falling back to a full pull if a browser only reports pressed).

@@ -13,8 +13,10 @@ import { frameAt } from "./frame.js";
 import { makeSign } from "./signs.js";
 
 const EDGE_M = 1.75;            // the platform edge is this far from the middle of the track
-const WIDTH_M = 11;             // how wide the platform is
+const WIDTH_M = 11;             // how wide a terminus platform is
 const HEIGHT_M = 0.9;           // its top is this high above the rails
+const HALT_WIDTH_M = 3.4;       // a halt's platform is much narrower...
+const HALT_HEIGHT_M = 0.55;     // ...and lower: it never had the traffic to justify more
 const SECTION_M = 10;           // the platform is built in sections this long
 const RAMP_M = 14;              // it slopes down to the ground at each end over this length
 const GROUND_M = -0.65;         // the ground beside the track, relative to the rails
@@ -28,6 +30,9 @@ function addStation(builder, ctx, terrain, station, d0, d1, extras) {
   const c = station.at;
   const half = station.platformLength_m / 2;
   const s = station.side === "left" ? -1 : 1;
+  const isHalt = station.kind === "halt";
+  const width = isHalt ? HALT_WIDTH_M : WIDTH_M;
+  const height = isHalt ? HALT_HEIGHT_M : HEIGHT_M;
   const fc = frameAt(path, c);
   const yaw = -fc.heading;
   const has = (along) => c + along >= d0 && c + along < d1;
@@ -55,22 +60,44 @@ function addStation(builder, ctx, terrain, station, d0, d1, extras) {
     const fs = frameAt(path, c + along);
     const pitch = Math.atan(fs.slope);
     const shade = 0.93 + 0.07 * hashRandom(seed, Math.round(c), Math.round(along / SECTION_M));
-    box(fs, 0, EDGE_M + WIDTH_M / 2, -0.25, WIDTH_M, 2.1, SECTION_M + 0.04, "#8f9089", shade, pitch);              // the concrete body
-    box(fs, 0, EDGE_M + 0.175, HEIGHT_M - 0.05, 0.35, 0.1, SECTION_M + 0.04, "#bdbdb4", 1, pitch);                    // the edge stones
-    box(fs, 0, EDGE_M + 0.35 + (WIDTH_M - 0.35) / 2, HEIGHT_M - 0.05, WIDTH_M - 0.35, 0.1, SECTION_M + 0.04, "#4a4c50", shade, pitch); // the surface
-    box(fs, 0, EDGE_M + 0.6, HEIGHT_M + 0.003, 0.5, 0.02, SECTION_M + 0.04, "#e6c020", 1, pitch);                     // yellow safety strip
+    box(fs, 0, EDGE_M + width / 2, -0.25, width, 2.1, SECTION_M + 0.04, "#8f9089", shade, pitch);              // the concrete body
+    box(fs, 0, EDGE_M + 0.175, height - 0.05, 0.35, 0.1, SECTION_M + 0.04, "#bdbdb4", 1, pitch);                  // the edge stones
+    box(fs, 0, EDGE_M + 0.35 + (width - 0.35) / 2, height - 0.05, width - 0.35, 0.1, SECTION_M + 0.04, "#4a4c50", shade, pitch); // the surface
+    box(fs, 0, EDGE_M + 0.6, height + 0.003, 0.5, 0.02, SECTION_M + 0.04, "#e6c020", 1, pitch);                   // yellow safety strip
   }
   for (const end of [-1, 1]) {
     const edgeAlong = end * half;
     if (!has(edgeAlong + (end * RAMP_M) / 2)) continue;
     const fe = frameAt(path, c + edgeAlong);
     const foot = edgeAlong + end * RAMP_M;
-    quad(fe, [edgeAlong, EDGE_M, HEIGHT_M], [edgeAlong, EDGE_M + WIDTH_M, HEIGHT_M], [foot, EDGE_M + WIDTH_M, GROUND_M + 0.05], [foot, EDGE_M, GROUND_M + 0.05], "#4a4c50", 0.95, [0, 1, 0]);
+    quad(fe, [edgeAlong, EDGE_M, height], [edgeAlong, EDGE_M + width, height], [foot, EDGE_M + width, GROUND_M + 0.05], [foot, EDGE_M, GROUND_M + 0.05], "#4a4c50", 0.95, [0, 1, 0]);
     // The two sloping sides, in concrete: triangles facing away from the platform.
-    for (const [lateral, direction] of [[EDGE_M, 1], [EDGE_M + WIDTH_M, -1]]) {
+    for (const [lateral, direction] of [[EDGE_M, 1], [EDGE_M + width, -1]]) {
       const P = (along, up) => fe.at(along, s * lateral, up);
-      builder.addQuadFacing(P(edgeAlong, HEIGHT_M), P(edgeAlong, GROUND_M), P(foot, GROUND_M + 0.05), P(foot, GROUND_M + 0.05), colour("#8f9089"), 0.9, [direction * -s * Math.cos(fe.heading), 0, direction * -s * Math.sin(fe.heading)]);
+      builder.addQuadFacing(P(edgeAlong, height), P(edgeAlong, GROUND_M), P(foot, GROUND_M + 0.05), P(foot, GROUND_M + 0.05), colour("#8f9089"), 0.9, [direction * -s * Math.cos(fe.heading), 0, direction * -s * Math.sin(fe.heading)]);
     }
+  }
+
+  // ---- The STOP MARKER: a black-and-yellow chevron board on a post, right at the station's
+  // stopMarkerAt_m (a terminus differs from a through platform's middle — see route.js),
+  // where the driver aims to stop the front of the locomotive (see src/scoring.js). ----
+  const markerAlong = station.stopMarkerAt_m - c;
+  if (has(markerAlong)) {
+    const fm = frameAt(path, c + markerAlong);
+    const markerUp = height + 1.4;
+    const mbox = (away, up, w, h, l, hex, roll = 0) => {
+      const [x, y, z] = fm.at(0, s * away, up);
+      builder.addBox(x, y, z, w, h, l, -fm.heading, colour(hex), 1, 0, roll);
+    };
+    mbox(EDGE_M + 0.3, markerUp - 0.7, 0.09, 1.4, 0.09, "#2c2f33");            // the post
+    mbox(EDGE_M + 0.3, markerUp, 0.5, 0.42, 0.05, "#f0c218");                  // the yellow board
+    for (const lean of [0.7, -0.7]) mbox(EDGE_M + 0.3, markerUp, 0.12, 0.52, 0.06, "#141414", lean); // a black chevron
+  }
+
+  // A halt is unstaffed: a short platform, a small shelter, a nameboard and a lamp, nothing more.
+  if (isHalt) {
+    addHaltFurniture(builder, ctx, terrain, station, fc, s, box, sign, has, height);
+    return;
   }
 
   // ---- The old station building (red brick, slate roof), on the platform's back edge ----
@@ -205,6 +232,37 @@ function addStation(builder, ctx, terrain, station, d0, d1, extras) {
       box(fs, shift - 1.6, 16.0, GROUND_M + 1.05, 2.1, 0.5, 1.5, color, 0.85);        // the cabin
       box(fs, shift - 1.6, 16.0, GROUND_M + 1.05, 2.12, 0.34, 1.52, "#20262e");       // its windows
     }
+  }
+}
+
+// A village halt: unstaffed, so there is no ticket office and no footbridge — just a short
+// platform, a little timber waiting shelter (open on the platform side), a nameboard on its
+// own post so you can read it as you arrive, a lamp for the dark evenings, and a bin.
+function addHaltFurniture(builder, ctx, terrain, station, fc, s, box, sign, has, height) {
+  const timber = "#6a5643", roof = "#3f4448";
+
+  if (has(0)) {
+    const wallH = 2.1, depth = 1.5, backAway = EDGE_M + HALT_WIDTH_M - 0.35;
+    box(fc, 0, backAway, height + wallH / 2, 2.6, wallH, 0.1, timber);                          // the back wall
+    for (const along of [-1.15, 1.15]) box(fc, along, backAway - depth / 2, height + wallH / 2, 0.1, wallH, depth, timber); // the two side walls
+    box(fc, 0, backAway - depth / 2 - 0.6, height + wallH + 0.35, 3.2, 0.1, depth + 1.4, roof, 1, 0.18 * (s > 0 ? -1 : 1)); // a mono-pitch roof, sloping down toward the platform edge
+    box(fc, 0, backAway - depth + 0.55, height + 0.45, 1.9, 0.06, 0.42, "#8a6a45");              // a bench inside
+    box(fc, 0, backAway - depth + 0.3, height + 0.75, 1.9, 0.55, 0.05, "#8a6a45");
+  }
+  const lampAlong = 8;
+  if (has(lampAlong)) {
+    box(fc, lampAlong, 0.9, height + 1.6, 0.1, 3.2, 0.1, "#6a7078");
+    box(fc, lampAlong, 0.75, height + 3.2, 0.6, 0.08, 0.28, "#e9f0f6", 1.5, 0, s * 0.12);
+  }
+  const binAlong = -8;
+  if (has(binAlong)) {
+    const [x, y, z] = fc.at(binAlong, s * 0.9, height + 0.35);
+    builder.addShape(CYLINDER, x, y, z, 0.32, 0.6, 0.32, 0, 0, colour("#2c4a3a"));
+  }
+  const boardAlong = -16;
+  if (has(boardAlong)) {
+    box(fc, boardAlong, 1.0, height + 1.1, 0.08, 2.2, 0.08, "#2c2f33");                          // the post
+    sign("old", station.name, 3.2, 0.36, boardAlong, 1.15, height + 1.95);
   }
 }
 

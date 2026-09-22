@@ -21,11 +21,14 @@ import { createHud } from "./hud.js";
 import { createDebugReadout } from "./debug.js";
 import { createAdaptiveResolution } from "./adaptive.js";
 import { createAudio, auditHorn } from "./audio.js";
+import { makeScoreTracker, updateScoreTracker, totalScore } from "./scoring.js";
 
 const quality = C.QUALITY_SETTINGS[C.QUALITY] || C.QUALITY_SETTINGS.medium;
 const MAX_FRAME_S = 0.25;      // a long pause (like switching tabs) must not make the train jump
 const MAX_STEPS_PER_FRAME = 30;
-const BUFFER_STOP_GAP_M = 4.5; // the train stops this far before the end of the line (the buffers are at the end)
+const BUFFER_STOP_GAP_M = 1.5; // a hard safety stop just short of the buffers, so you can't run
+                                // through them — but the REAL stopping point is the marker
+                                // (src/scoring.js): brake early and this should barely matter.
 const REVERSE_LIMIT_M = 30;    // and can only reverse back this far along the line (the buffers at the start station)
 const HINT_SECONDS = 3;
 const degrees = (d) => (d * Math.PI) / 180;
@@ -89,6 +92,7 @@ let wipersOn = false;
 let tailLights = false;   // the tail light switch (nothing you can see from the cab, but the switch moves)
 let look = { yaw: 0, pitch: 0 };
 let swayClock = 0;
+let scoreTracker = makeScoreTracker(route); // one entry per station after the first (see src/scoring.js)
 
 function startRun() {
   train = makeTrain(makeTrainParams());
@@ -97,6 +101,7 @@ function startRun() {
   runSeconds = 0;
   hintText = "";
   hintTimer = 0;
+  scoreTracker = makeScoreTracker(route);
   world.prime(route.start_m);
   screen = "drive";
 }
@@ -122,14 +127,16 @@ function startScreen() {
 const pausedScreen = { title: "Paused", lines: [], prompt: "Press Start to carry on" };
 function finishedScreen() {
   const minutes = Math.floor(runSeconds / 60), seconds = Math.floor(runSeconds % 60);
-  return {
-    title: "End of the line",
-    lines: [
-      `You drove ${ROUTE.lengthMiles} miles in ${minutes} min ${seconds} s.`,
-      "That's the end of the line for now. The village and the town come next!",
-    ],
-    prompt: "Press A to drive again",
-  };
+  const lines = [`You drove ${ROUTE.lengthMiles} miles in ${minutes} min ${seconds} s.`];
+  for (const station of scoreTracker.stations) {
+    lines.push(
+      station.scored
+        ? `${station.name}: ${station.label} — ${station.distance_m.toFixed(1)} m from the marker (${station.points} pts)`
+        : `${station.name}: you didn't stop there`
+    );
+  }
+  lines.push(`Total: ${totalScore(scoreTracker)} points`);
+  return { title: "Results", lines, prompt: "Press A to drive again" };
 }
 
 // ---- Each frame while driving ----
@@ -159,12 +166,22 @@ function driveFrame(seconds) {
   if (steps === MAX_STEPS_PER_FRAME) leftoverSeconds = 0; // we fell behind: drop the extra time
   runSeconds += seconds;
 
-  // The ends of the line: the start (backwards) and the buffer stop.
+  // The ends of the line: the start (backwards) and a hard safety stop just short of the
+  // buffers, so a driver who forgets to brake can't run through them.
   if (train.distance_m < REVERSE_LIMIT_M) { train.distance_m = REVERSE_LIMIT_M; train.speed_mps = 0; }
   if (train.distance_m >= route.length_m - BUFFER_STOP_GAP_M) {
     train.distance_m = route.length_m - BUFFER_STOP_GAP_M;
     train.speed_mps = 0;
-    screen = "finished";
+  }
+
+  // Stopping (speed exactly 0) near an un-scored station's marker scores it (src/scoring.js).
+  // The journey ends once the LAST station on the route has been scored — however the driver
+  // got there, careful braking or the safety stop above.
+  const scored = updateScoreTracker(scoreTracker, train.distance_m, train.speed_mps);
+  if (scored) {
+    hintText = `${scored.label} stop at ${scored.name}! (${scored.points} pts)`;
+    hintTimer = HINT_SECONDS;
+    if (scored === scoreTracker.stations[scoreTracker.stations.length - 1]) screen = "finished";
   }
 
   // Friendly hints when the driver tries to add power but nothing will happen.
@@ -308,6 +325,8 @@ if (import.meta.env.DEV) {
     get adaptive() { return adaptive; },
     get headlights() { return headlights; },
     get wipersOn() { return wipersOn; },
+    get scoreTracker() { return scoreTracker; },
+    get totalScore() { return totalScore(scoreTracker); },
     audio, auditHorn,
     setHeadlights(mode) { headlights = mode; },
     // Jump to a spot on the line (and build the world around it).
