@@ -321,5 +321,7 @@ This sends your changes to GitHub, and the game on the internet updates a minute
     again 5 times, 2 s apart; 115200 baud (it makes no difference over USB).
   - If the browser closes while the horn is held, the light stays on until the next `h` (or the
     Pico is unplugged): the Pico only does what it is told.
-  - Tested with MicroPython v1.29.0 on a plain Pico (RP2040). `tools/check-browser.cjs` checks the
+  - Tested with MicroPython v1.29.0 on a plain Pico (RP2040), and confirmed on the real Raspberry Pi 5
+    with the F310 against the Pages address: the one-time `?pico` device list, the light following
+    D-pad left, D-pad right and A, and reconnecting by itself after a reload without `?pico`. `tools/check-browser.cjs` checks the
     game with no Web Serial at all, and with a pretend Pico that records what it is sent.
