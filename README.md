@@ -101,6 +101,17 @@ After that the browser remembers it: the game finds the Pico by itself every tim
 without `?pico`, and even if you unplug it and plug it back in. No Pico? The game plays
 exactly the same. How to set up a new Pico is in [`pico/README.md`](pico/README.md).
 
+**With `./run` too.** The browser only lets web pages talk to USB devices on "safe" addresses,
+and the `http://192.168.1.132:5173` address from `./run` isn't one. Chromium on the Pi has to be
+told once that it is safe:
+
+1. In Chromium on the Pi, go to `chrome://flags/#unsafely-treat-insecure-origin-as-secure`
+2. In the box, type `http://192.168.1.132:5173` (exactly the **Network** address `./run` prints),
+   and set the setting next to it to **Enabled**.
+3. Press **Relaunch** at the bottom.
+4. Open `http://192.168.1.132:5173/?pico`, press any key and choose the Pico, just like above.
+   (The browser remembers the Pico separately for each address, so this is needed once here too.)
+
 ## Your first change: a shorter train
 
 1. Open [`src/config.js`](src/config.js).
@@ -309,11 +320,13 @@ This sends your changes to GitHub, and the game on the internet updates a minute
   `H` on, `h` off (the same horn state the sound uses, so every horn button works, and the light
   goes off when paused). `PICO_LED_ENABLED = false` in `config.js` switches it off completely.
   - Web Serial needs Chrome or Chromium on a "secure" address: `https://` (GitHub Pages) or
-    `http://localhost` work, but the dev server's `http://192.168.1.132:5173` does not. To use the
-    horn light with the dev server from the Pi, start Chromium with
-    `--unsafely-treat-insecure-origin-as-secure=http://192.168.1.132:5173 --user-data-dir=$HOME/.config/chromium-cab`
-    (the flag only works with its own profile folder; keeping it in your home folder means the
-    browser still remembers the Pico next time).
+    `http://localhost` work, but the dev server's `http://192.168.1.132:5173` does not. The fix is
+    Chromium's "Insecure origins treated as secure" setting, set once in `chrome://flags` (steps in
+    "The horn light" above). It is saved in the normal profile, so the Pi's launch command doesn't
+    change. (The command-line equivalent is
+    `--unsafely-treat-insecure-origin-as-secure=http://192.168.1.132:5173`.) The setting and the Pico
+    permission are both tied to the exact address: if this box's address ever changes, update the
+    setting and pair again with `?pico`. A DHCP reservation for this box on the router avoids that.
   - Choices made where the brief was silent: the one-time device list only appears when the
     address has **`?pico`** (otherwise everyone on the Pages link, with no Pico, would get a device
     list on their first key press); the list only shows MicroPython Picos (USB `2e8a:0005`), so the
