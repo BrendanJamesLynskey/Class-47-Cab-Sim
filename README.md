@@ -112,6 +112,10 @@ told once that it is safe:
 4. Open `http://192.168.1.132:5173/?pico`, press any key and choose the Pico, just like above.
    (The browser remembers the Pico separately for each address, so this is needed once here too.)
 
+If Chromium shows only a blank white page after the relaunch, look for a hidden window asking
+for a password to unlock the "keyring" (where the Pi keeps saved passwords). Chromium waits for
+it before doing anything else. Type the password and it carries on.
+
 ## Your first change: a shorter train
 
 1. Open [`src/config.js`](src/config.js).
@@ -336,5 +340,6 @@ This sends your changes to GitHub, and the game on the internet updates a minute
     Pico is unplugged): the Pico only does what it is told.
   - Tested with MicroPython v1.29.0 on a plain Pico (RP2040), and confirmed on the real Raspberry Pi 5
     with the F310 against the Pages address: the one-time `?pico` device list, the light following
-    D-pad left, D-pad right and A, and reconnecting by itself after a reload without `?pico`. `tools/check-browser.cjs` checks the
+    D-pad left, D-pad right and A, and reconnecting by itself after a reload without `?pico`.
+    Also confirmed on the Pi with the dev server (`./run`) after the `chrome://flags` setting above. `tools/check-browser.cjs` checks the
     game with no Web Serial at all, and with a pretend Pico that records what it is sent.
