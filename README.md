@@ -283,4 +283,6 @@ This sends your changes to GitHub, and the game on the internet updates a minute
   window and a door on each side. It is stylised, not a museum replica.
 - [`docs/directions_pico_horn_led.md`](docs/directions_pico_horn_led.md) is a brief for a
   planned extra: a real LED on a Raspberry Pi Pico that lights up when the horn sounds, driven
-  from the browser over Web Serial. Not built yet.
+  from the browser over Web Serial. The Pico side is done: [`pico/`](pico/README.md) has the
+  MicroPython program ([`pico/main.py`](pico/main.py)), a stand-alone test page
+  ([`pico/test.html`](pico/test.html)) and how to flash it. The game side is next.

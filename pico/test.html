@@ -1,0 +1,66 @@
+<!doctype html>
+<!--
+  test.html — checks the Pico's light on its own, without the game.
+  Open it from the dev server (http://localhost:5173/pico/test.html) in Chrome or Chromium,
+  press "Connect", choose the Pico in the list, then try the buttons.
+  Web Serial only works on https:// or http://localhost, not on a 192.168... address.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pico horn light test</title>
+  <style>
+    body { margin: 0; padding: 24px 16px; font-family: system-ui, sans-serif; background: #1b2430; color: #e8ecf1; }
+    h1 { font-size: 1.4rem; margin: 0 0 16px; }
+    button { font: inherit; font-size: 1.1rem; padding: 12px 20px; margin: 0 8px 8px 0; border: 0; border-radius: 6px; cursor: pointer; }
+    button:disabled { opacity: 0.4; cursor: default; }
+    #connect { background: #f2c230; color: #1b2430; }
+    #on { background: #3fbf5f; color: #fff; }
+    #off { background: #55606e; color: #fff; }
+    #status { margin-top: 16px; font-family: monospace; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <h1>Pico horn light test</h1>
+  <button id="connect">Connect</button>
+  <button id="on" disabled>Light on (H)</button>
+  <button id="off" disabled>Light off (h)</button>
+  <div id="status"></div>
+
+  <script>
+    const statusBox = document.getElementById("status");
+    const say = (text) => { statusBox.textContent += new Date().toLocaleTimeString() + "  " + text + "\n"; };
+    let writer = null;
+
+    async function connect() {
+      if (!("serial" in navigator)) { say("This browser has no Web Serial (use Chrome or Chromium, on https:// or localhost)."); return; }
+      try {
+        // Use a Pico we were already allowed to use, or ask (the one-time device list).
+        const ports = await navigator.serial.getPorts();
+        const port = ports.length === 1 ? ports[0] : await navigator.serial.requestPort();
+        await port.open({ baudRate: 115200 });
+        writer = port.writable.getWriter();
+        say("Connected.");
+        document.getElementById("on").disabled = false;
+        document.getElementById("off").disabled = false;
+      } catch (error) {
+        say("Could not connect: " + error.message);
+      }
+    }
+
+    async function send(letter) {
+      try {
+        await writer.write(new TextEncoder().encode(letter));
+        say("Sent " + letter);
+      } catch (error) {
+        say("Could not send: " + error.message);
+      }
+    }
+
+    document.getElementById("connect").addEventListener("click", connect);
+    document.getElementById("on").addEventListener("click", () => send("H"));
+    document.getElementById("off").addEventListener("click", () => send("h"));
+  </script>
+</body>
+</html>
