@@ -281,3 +281,6 @@ This sends your changes to GitHub, and the game on the internet updates a minute
   the power controller box just right of the driver, a small horn valve lever at the far left,
   cream walls with blue panels, a roller blind over each half of the windscreen, a droplight
   window and a door on each side. It is stylised, not a museum replica.
+- [`docs/directions_pico_horn_led.md`](docs/directions_pico_horn_led.md) is a brief for a
+  planned extra: a real LED on a Raspberry Pi Pico that lights up when the horn sounds, driven
+  from the browser over Web Serial. Not built yet.
