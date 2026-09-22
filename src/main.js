@@ -21,6 +21,7 @@ import { createHud } from "./hud.js";
 import { createDebugReadout } from "./debug.js";
 import { createAdaptiveResolution } from "./adaptive.js";
 import { createAudio, auditHorn } from "./audio.js";
+import { createPico } from "./pico.js";
 import { makeScoreTracker, updateScoreTracker, totalScore } from "./scoring.js";
 
 const quality = C.QUALITY_SETTINGS[C.QUALITY] || C.QUALITY_SETTINGS.medium;
@@ -75,6 +76,7 @@ applyPictureSize();
 // ---- Controls, display, and the state of the game ----
 const controls = createControls();
 const audio = createAudio();
+const pico = createPico(); // the horn light, if a Pico is plugged in (src/pico.js)
 const hud = createHud();
 const debug = createDebugReadout();
 hud.setEnabled(C.SHOW_HUD);
@@ -217,6 +219,7 @@ function updateView(seconds) {
   // The horn only sounds while you are driving (not on the start screen or when paused).
   const horn = { low: screen === "drive" && controls.hornLow, high: screen === "drive" && controls.hornHigh };
   audio.setHorn(horn.low, horn.high);
+  pico.setHorn(horn.low || horn.high);
   cab.update({
     speed_mph: mpsToMph(train.speed_mps),
     brakePipe_psi: gauges.brakePipe_psi,
@@ -327,7 +330,7 @@ if (import.meta.env.DEV) {
     get wipersOn() { return wipersOn; },
     get scoreTracker() { return scoreTracker; },
     get totalScore() { return totalScore(scoreTracker); },
-    audio, auditHorn,
+    audio, auditHorn, pico,
     setHeadlights(mode) { headlights = mode; },
     // Jump to a spot on the line (and build the world around it).
     teleport(distance_m) { train.distance_m = distance_m; world.prime(distance_m); },

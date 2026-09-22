@@ -456,6 +456,78 @@ function installFakePad() {
     await page3.close();
   }
 
+  // ---- The horn light (src/pico.js) with NO Web Serial at all: the game must not notice ----
+  if (!smoke) {
+    const page4 = await browser.newPage();
+    await page4.setViewport({ width: 640, height: 360 });
+    const picoProblems = [];
+    page4.on("pageerror", (e) => picoProblems.push("pageerror: " + e.message));
+    page4.on("console", (m) => { if (m.type() === "error" || m.type() === "warning") picoProblems.push(`console.${m.type()}: ${m.text()}`); });
+    await page4.evaluateOnNewDocument(installFakePad);
+    const hadSerial = await page.evaluate(() => "serial" in navigator); // measured on the game page (localhost counts as secure)
+    console.log(`     (this headless Chrome ${hadSerial ? "has" : "does not have"} Web Serial of its own)`);
+    await page4.evaluateOnNewDocument(() => { delete Navigator.prototype.serial; delete navigator.serial; });
+    // ?pico asks for the device list on the first key press: with no Web Serial that must do nothing.
+    await page4.goto(url + "?fixed&pico", { waitUntil: "networkidle0" });
+    check("horn light, no Web Serial: navigator.serial really is gone", !(await page4.evaluate(() => "serial" in navigator)));
+    await page4.evaluate(() => { window.__pad.mode = "ready"; });
+    await page4.keyboard.press("Enter");
+    await page4.waitForFunction(() => window.__sim.screen === "drive", { timeout: 20000, polling: 100 });
+    await page4.keyboard.down("KeyH");
+    await page4.waitForFunction(() => window.__sim.controls.hornHigh, { timeout: 20000, polling: 50 });
+    await page4.keyboard.up("KeyH");
+    await page4.evaluate(() => { const b = window.__pad.pad.buttons[0]; b.pressed = true; b.value = 1; }); // A: both notes
+    await page4.waitForFunction(() => window.__sim.controls.hornLow && window.__sim.controls.hornHigh, { timeout: 20000, polling: 50 });
+    await page4.evaluate(() => { const b = window.__pad.pad.buttons[0]; b.pressed = false; b.value = 0; });
+    await sleep(1000);
+    const noSerial = await page4.evaluate(() => ({ screen: window.__sim.screen, available: window.__sim.pico.available, audio: window.__sim.audio.available }));
+    check("horn light, no Web Serial: game drives and sounds the horn as normal, light not available", noSerial.screen === "drive" && noSerial.available === false && noSerial.audio, JSON.stringify(noSerial));
+    check("horn light, no Web Serial: no page errors, console errors or warnings", picoProblems.length === 0, picoProblems.join("\n        "));
+    await page4.close();
+  }
+
+  // ---- The horn light with a PRETEND Pico: every way of sounding the horn must light it ----
+  if (!smoke) {
+    const page5 = await browser.newPage();
+    await page5.setViewport({ width: 640, height: 360 });
+    const picoProblems = [];
+    page5.on("pageerror", (e) => picoProblems.push("pageerror: " + e.message));
+    page5.on("console", (m) => { if (m.type() === "error") picoProblems.push("console.error: " + m.text()); });
+    await page5.evaluateOnNewDocument(installFakePad);
+    await page5.evaluateOnNewDocument(() => {
+      // A Pico the browser already remembers (so no device list), which records every letter sent.
+      window.__picoLetters = "";
+      const port = {
+        getInfo: () => ({ usbVendorId: 0x2e8a, usbProductId: 0x0005 }),
+        open: async () => {}, close: async () => {},
+        writable: { getWriter: () => ({ write: async (bytes) => { window.__picoLetters += new TextDecoder().decode(bytes); }, releaseLock() {} }) },
+      };
+      const serial = new EventTarget();
+      serial.getPorts = async () => [port];
+      serial.requestPort = async () => port;
+      Object.defineProperty(Navigator.prototype, "serial", { get: () => serial, configurable: true });
+    });
+    await page5.goto(url + "?fixed", { waitUntil: "networkidle0" });
+    await page5.waitForFunction(() => window.__sim.pico.available, { timeout: 20000, polling: 100 });
+    const letters = () => page5.evaluate(() => window.__picoLetters);
+    check("horn light: finds a remembered Pico by itself and starts with the light off", (await letters()) === "h", JSON.stringify(await letters()));
+    await page5.evaluate(() => { window.__pad.mode = "ready"; window.__sim.start(); });
+    const pad5 = (i, v) => page5.evaluate((i, v) => { const b = window.__pad.pad.buttons[i]; b.pressed = v > 0; b.value = v; }, i, v);
+    const hornIs = (on) => page5.waitForFunction((on) => (window.__sim.controls.hornLow || window.__sim.controls.hornHigh) === on, { timeout: 20000, polling: 50 }, on);
+    // D-pad left (low), D-pad right (high), A (both), then the keyboard H.
+    for (const button of [14, 15, 0]) { await pad5(button, 1); await hornIs(true); await sleep(300); await pad5(button, 0); await hornIs(false); await sleep(300); }
+    await page5.keyboard.down("KeyH"); await hornIs(true); await sleep(300); await page5.keyboard.up("KeyH"); await hornIs(false); await sleep(300);
+    check("horn light: D-pad left, D-pad right, A and keyboard H each send H then h, once each", (await letters()) === "hHhHhHhHh", JSON.stringify(await letters()));
+    // Pausing with the horn held silences the horn, so the light must go off too.
+    await pad5(0, 1); await hornIs(true); await sleep(300);
+    await page5.keyboard.press("KeyP"); await page5.waitForFunction(() => window.__sim.screen === "paused", { timeout: 20000, polling: 50 });
+    await sleep(300);
+    await pad5(0, 0);
+    check("horn light: pausing with the horn held turns the light off", (await letters()).endsWith("Hh"), JSON.stringify(await letters()));
+    check("horn light: no page errors or console errors", picoProblems.length === 0, picoProblems.join("\n        "));
+    await page5.close();
+  }
+
   await browser.close();
   console.log(failures === 0 ? "\nAll browser checks passed." : `\n${failures} browser check(s) FAILED.`);
   process.exit(failures === 0 ? 0 : 1);

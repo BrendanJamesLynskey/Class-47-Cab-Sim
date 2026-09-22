@@ -50,6 +50,10 @@ export const HORN_HIGH_HZ = 425;   // the high note
 export const HORN_VOLUME = 0.35;   // how loud, 0 to 1 (never above about 0.6 or it may crackle)
 export const MASTER_VOLUME = 0.8;  // the volume of all the game's sounds
 
+// ---- The horn light (a Raspberry Pi Pico with a light on it, see pico/README.md) ----
+export const PICO_LED_ENABLED = true; // false = never talk to the Pico at all
+export const PICO_BAUD_RATE = 115200; // how fast to talk to it (hardly matters over USB, but the Pico and the game must agree)
+
 // ---- Headlights ----
 export const HEADLIGHT_BEAMS = true;    // false = no light beams at all (a little faster on a slow computer)
 export const HEADLIGHT_DIPPED = 150;     // how bright the dipped beam is
