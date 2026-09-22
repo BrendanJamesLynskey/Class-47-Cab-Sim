@@ -161,9 +161,10 @@ you personally *can* fully verify, so do it properly before writing a line of ga
 **Milestone 1: wire it into the real game, then STOP for Brendan.** `src/pico.js`, the
 `config.js` flags, the `main.js` wiring, the combined unlock gesture, the README update. Verify
 with headless Chrome that the game behaves identically with no Pico and no `navigator.serial`
-at all (stub it out, confirm zero console errors — see section 7). Then hand over to Brendan
-(section 8) for the real test: Pico back on the Pi, F310 in hand, watch the LED with your own
-eyes. Don't start anything past this until he confirms it works (or reports what doesn't).
+at all (stub it out, confirm zero console errors — see section 7). Update the memory note
+(section 8a) so this is easy to pick up again later. Then hand over to Brendan (section 8) for
+the real test: Pico back on the Pi, F310 in hand, watch the LED with your own eyes. Don't start
+anything past this until he confirms it works (or reports what doesn't).
 
 ## 7. How to verify
 
@@ -199,6 +200,25 @@ the real Pi, with the real F310, with the real Pico wired up as in the photo. Sa
 Then say honestly what you verified yourself (Milestone 0's direct test, the headless
 no-Pico regression check) and what you did not (anything on the real Pi).
 
+## 8a. Remember it (so this is easy to pick up again later)
+
+The milestones in this file are safe on their own — they're committed to the repo, not
+dependent on any session's memory. But a *future* session starting cold won't know this feature
+exists unless something points it there. So, at the end of Milestone 1 (and again if you ever
+resume this after a gap):
+
+- Update the existing memory file `project_class47_cab_sim.md` in
+  `~/.claude/projects/-home-brendan-Claude-sandbox/memory/` (don't create a new one — this is
+  still the Class 47 Cab Sim project). Add a short paragraph: what's built, what Brendan
+  confirmed on the real Pi (or hasn't yet), which milestone is next, and anything you learned
+  that isn't already in this brief (exact serial device path, MicroPython version, anything that
+  surprised you).
+- If `MEMORY.md`'s one-line pointer to that file no longer reflects the state (e.g. it still
+  says "M0+M1+M2 live" with no mention of the Pico), update that line too.
+- If Brendan reports a problem on the real Pi that you can't fix blind, write down exactly what
+  he saw rather than guessing — the next session (maybe weeks from now) will need that, not a
+  guess.
+
 ## 9. Done means
 
 - The game plays exactly as before when no Pico is attached — verified by the headless
@@ -209,6 +229,8 @@ no-Pico regression check) and what you did not (anything on the real Pi).
   existing sound-unlock gesture.
 - The README documents the feature, the one-time device-picker step, and the Chromium flag for
   local-dev testing.
+- `project_class47_cab_sim.md` (memory) is updated with what's built and what's next (section 8a)
+  — check this before saying you're done.
 - Committed and pushed, with the Co-Authored-By line your session's attribution instructions
   give you.
 - You have reported plainly what you verified yourself and what is still only Brendan's to
