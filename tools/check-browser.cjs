@@ -456,6 +456,86 @@ function installFakePad() {
     await page3.close();
   }
 
+  // ---- The MINI_KEYBOARD (12 buttons + 2 knobs; to the browser it is a keyboard) ----
+  // A separate browser profile, so the remembered controller choice can't leak into the tests above.
+  if (!smoke) {
+    const context = await browser.createBrowserContext();
+    const page6 = await context.newPage();
+    await page6.setViewport({ width: 640, height: 360 });
+    const miniProblems = [];
+    page6.on("pageerror", (e) => miniProblems.push("pageerror: " + e.message));
+    page6.on("console", (m) => { if (m.type() === "error") miniProblems.push("console.error: " + m.text()); });
+    await page6.evaluateOnNewDocument(installFakePad);
+    await page6.goto(url + "?fixed", { waitUntil: "networkidle0" });
+    const frames6 = (n = 4) => page6.evaluate((n) => new Promise((res) => { let k = 0; const f = () => (++k >= n ? res() : requestAnimationFrame(f)); requestAnimationFrame(f); }), n);
+    const key = async (code) => { await page6.keyboard.press(code); await frames6(); };
+    const clicks = async (code, n) => { for (let i = 0; i < n; i++) await page6.keyboard.press(code); await frames6(); };
+    const train6 = () => page6.evaluate(() => ({ throttle: window.__sim.train.throttle, brake: window.__sim.train.brakeHandle, reverser: window.__sim.train.reverser, emergency: window.__sim.train.emergency, screen: window.__sim.screen, look: { ...window.__sim.controls.look }, controller: window.__sim.controls.controller }));
+    const overlay6 = () => page6.evaluate(() => document.querySelector(".overlay").innerText);
+    const near = (a, b) => Math.abs(a - b) < 1e-6;
+
+    check("MINI_KEYBOARD: the start screen says the F310 is chosen at first", /Controller: F310/.test(await overlay6()));
+    await key("Tab");
+    check("MINI_KEYBOARD: Tab on the start screen switches to it", /Controller: MINI_KEYBOARD/.test(await overlay6()) && (await train6()).controller === "MINI_KEYBOARD", await overlay6());
+    await key("KeyA"); // top-left button: start
+    let t6 = await train6();
+    check("MINI_KEYBOARD: the top-left button (a) starts the drive, and does not put the brake on", t6.screen === "drive" && t6.brake === 0, JSON.stringify(t6));
+    await key("KeyE");
+    check("MINI_KEYBOARD: e = reverser forward", (await train6()).reverser === 1);
+    await clicks("Digit6", 4);
+    t6 = await train6();
+    check("MINI_KEYBOARD: 4 clicks clockwise on the lower knob = 4 small power steps", near(t6.throttle, 0.2), `throttle ${t6.throttle}`);
+    await page6.keyboard.down("KeyJ"); await clicks("Digit6", 1); await page6.keyboard.up("KeyJ"); await frames6();
+    t6 = await train6();
+    check("MINI_KEYBOARD: shift (j) + a click = one big power step", near(t6.throttle, 0.45), `throttle ${t6.throttle}`);
+    await clicks("Digit4", 1);
+    t6 = await train6();
+    check("MINI_KEYBOARD: anticlockwise takes a small step of power off", near(t6.throttle, 0.4), `throttle ${t6.throttle}`);
+    await key("Digit5");
+    check("MINI_KEYBOARD: pressing the lower knob in and letting go = power off", (await train6()).throttle === 0);
+    await clicks("Digit3", 3);
+    t6 = await train6();
+    check("MINI_KEYBOARD: 3 clicks clockwise on the upper knob = 3 small brake steps", near(t6.brake, 0.15), `brake ${t6.brake}`);
+    await key("Digit2");
+    check("MINI_KEYBOARD: pressing the upper knob in and letting go = brake off", (await train6()).brake === 0);
+    await clicks("Digit6", 2); // a little power, to check that looking around doesn't switch it off
+    await page6.keyboard.down("Digit5"); await clicks("Digit6", 3); await page6.keyboard.up("Digit5"); await frames6();
+    t6 = await train6();
+    check("MINI_KEYBOARD: lower knob pressed in and turned = look right, and the power stays on", near(t6.look.x, 0.3) && near(t6.throttle, 0.1), JSON.stringify(t6));
+    await page6.keyboard.down("Digit2"); await clicks("Digit3", 2); await page6.keyboard.up("Digit2"); await frames6();
+    t6 = await train6();
+    check("MINI_KEYBOARD: upper knob pressed in and turned clockwise = look up, and the brake stays off", near(t6.look.y, -0.2) && t6.brake === 0, JSON.stringify(t6));
+    await key("KeyH");
+    t6 = await train6();
+    check("MINI_KEYBOARD: h = look straight ahead again", t6.look.x === 0 && t6.look.y === 0, JSON.stringify(t6.look));
+    const hudShown = () => page6.evaluate(() => document.querySelector(".hud").style.display !== "none");
+    const hudBefore = await hudShown();
+    await page6.keyboard.down("KeyJ"); await key("KeyH"); await page6.keyboard.up("KeyJ"); await frames6();
+    check("MINI_KEYBOARD: shift (j) + h = show/hide the speed display", (await hudShown()) !== hudBefore);
+    await page6.keyboard.down("KeyF"); await page6.keyboard.down("KeyG"); await frames6();
+    const horn6 = await page6.evaluate(() => ({ low: window.__sim.controls.hornLow, high: window.__sim.controls.hornHigh }));
+    await page6.keyboard.up("KeyF"); await page6.keyboard.up("KeyG"); await frames6();
+    check("MINI_KEYBOARD: f + g together = both horn notes", horn6.low && horn6.high, JSON.stringify(horn6));
+    await page6.evaluate(() => { window.__sim.train.brakeHandle = 0.5; });
+    const wipersBefore = await page6.evaluate(() => window.__sim.wipersOn);
+    await key("KeyD");
+    t6 = await train6();
+    check("MINI_KEYBOARD: d = wipers, and the keyboard's own 'D = less brake' is switched off", (await page6.evaluate(() => window.__sim.wipersOn)) !== wipersBefore && near(t6.brake, 0.5), JSON.stringify(t6));
+    await page6.evaluate(() => { window.__pad.mode = "ready"; const b = window.__pad.pad.buttons[7]; b.pressed = true; b.value = 1; });
+    await frames6(10);
+    await page6.evaluate(() => { const b = window.__pad.pad.buttons[7]; b.pressed = false; b.value = 0; });
+    check("MINI_KEYBOARD: the F310's RT does nothing while the MINI_KEYBOARD is chosen", near((await train6()).throttle, 0.1));
+    await key("KeyL");
+    check("MINI_KEYBOARD: l = emergency brake", (await train6()).emergency === true);
+    await page6.reload({ waitUntil: "networkidle0" });
+    await frames6();
+    check("MINI_KEYBOARD: the choice is remembered after a reload", (await train6()).controller === "MINI_KEYBOARD" && /Controller: MINI_KEYBOARD/.test(await overlay6()));
+    await key("Tab");
+    check("MINI_KEYBOARD: Tab switches back to the F310", (await train6()).controller === "F310" && /Controller: F310/.test(await overlay6()));
+    check("MINI_KEYBOARD: no page errors or console errors", miniProblems.length === 0, miniProblems.join("\n        "));
+    await context.close();
+  }
+
   await browser.close();
   console.log(failures === 0 ? "\nAll browser checks passed." : `\n${failures} browser check(s) FAILED.`);
   process.exit(failures === 0 ? 0 : 1);

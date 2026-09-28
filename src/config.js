@@ -105,6 +105,67 @@ export const KEYS = {
 };
 // Hold Shift and press the arrow keys to look around. Or drag with the mouse.
 
+// ---- Which controller you drive with ----
+// There are two: the Logitech gamepad ("F310") and the little box with 12 buttons and
+// 2 knobs ("MINI_KEYBOARD"). Only the one you choose does anything. On the start screen,
+// press Tab on the keyboard to swap. The browser remembers your choice.
+export const CONTROLLER = "F310";        // the one to use the very first time
+export const CONTROLLER_SWITCH_KEY = "Tab";
+
+// The jobs a button can do (the same names as in KEYS above):
+//   throttleUp, throttleDown, brakeUp, brakeDown, emergency, hornHigh, hornLow,
+//   awsAcknowledge, headlights, tailLights, wipers, reverserForward, reverserReverse,
+//   pause, start, toggleHud, recentre
+// A button can do more than one job: list them all, like ["hornLow", "hornHigh"].
+
+// The Logitech F310 (switch on the back set to X). The left stick always looks around.
+// RT and LT are "analogue": squeeze gently to move a handle slowly.
+export const F310 = {
+  RT: ["throttleUp"],       RB: ["throttleDown"],
+  LT: ["brakeUp"],          LB: ["brakeDown"],
+  DPAD_UP: ["reverserForward"], DPAD_DOWN: ["reverserReverse"],
+  DPAD_LEFT: ["hornLow"],   DPAD_RIGHT: ["hornHigh"],
+  A: ["hornLow", "hornHigh", "start"], // both horn notes, and "start" on the start screen
+  B: ["awsAcknowledge"],    X: ["headlights"],    Y: ["wipers"],
+  BACK: ["emergency"],      START: ["pause"],
+  L3: ["tailLights"],       R3: ["recentre"],     // L3/R3 = pressing a stick in
+};
+
+// The MINI_KEYBOARD. Each button sends a letter, like a keyboard. Hold it with the knobs
+// on the right, and the buttons are:
+//     a  b  c  d        upper knob
+//     e  f  g  h
+//     i  j  k  l        lower knob
+export const MINI_KEYBOARD = {
+  buttons: {
+    KeyA: ["start", "pause"],  KeyB: ["headlights"],      KeyC: ["tailLights"],      KeyD: ["wipers"],
+    KeyE: ["reverserForward"], KeyF: ["hornLow"],         KeyG: ["hornHigh"],        KeyH: ["recentre"],
+    KeyI: ["reverserReverse"], KeyJ: ["shift"],           KeyK: ["awsAcknowledge"],  KeyL: ["emergency"],
+  },
+  // While the "shift" button is held down, these buttons do something else instead.
+  shiftButtons: {
+    KeyH: ["toggleHud"],
+  },
+  // Each knob sends one key per click as it turns, and another when you press it in.
+  // What a knob does:
+  //   turn         just turning it
+  //   turnShifted  turning it while holding the "shift" button
+  //   turnPressed  turning it while pressing the knob in
+  //   tap          pressing the knob in and letting go, without turning it
+  // Turning jobs: "power", "brake" (one small step per click), "powerBig", "brakeBig"
+  // (big steps), "lookSideways", "lookUpDown". Clockwise = more power, more brake,
+  // look right, look up. Tap jobs: "powerOff", "brakeOff", or any button job above.
+  knobs: [
+    { name: "upper", clockwise: "Digit3", anticlockwise: "Digit1", press: "Digit2",
+      turn: "brake", turnShifted: "brakeBig", turnPressed: "lookUpDown", tap: "brakeOff" },
+    { name: "lower", clockwise: "Digit6", anticlockwise: "Digit4", press: "Digit5",
+      turn: "power", turnShifted: "powerBig", turnPressed: "lookSideways", tap: "powerOff" },
+  ],
+};
+export const KNOB_STEP = 0.05;      // one click moves a handle this much (0.05 = 20 clicks from off to full)
+export const KNOB_BIG_STEP = 0.25;  // one click with "shift" held (4 clicks from off to full)
+export const KNOB_LOOK_STEP = 0.1;  // one click turns your head this much of the way round
+
 // ---- The picture ----
 export const QUALITY = "medium"; // "low", "medium" or "high": how far you can see, how many trees, how sharp
 export const QUALITY_SETTINGS = {

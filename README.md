@@ -54,6 +54,31 @@ turns anticlockwise** toward full power and the **brake handle turns clockwise**
 The switch on the back of the gamepad must be on **X**, not D.
 If it isn't, the start screen will tell you.
 
+## The MINI_KEYBOARD (12 buttons and 2 knobs)
+
+You can drive with the little box of buttons instead of the gamepad. On the start screen,
+press **Tab** on the keyboard to swap between the **F310** and the **MINI_KEYBOARD**. The start
+screen says which one is chosen, and the browser remembers it next time. Only the chosen one works.
+
+Hold it with the knobs on the right:
+
+| | | | | |
+|---|---|---|---|---|
+| **Start / pause** | **Headlights** | **Tail light** | **Wipers** | *upper knob:* **brake** |
+| **Reverser forward** | **Horn: low** | **Horn: high** | **Look straight ahead** | |
+| **Reverser back** | **SHIFT** | **AWS** | **Emergency brake!** | *lower knob:* **power** |
+
+- **Turn a knob:** each click moves its handle a little (clockwise = more power, or more brake).
+- **Hold SHIFT and turn:** big steps, 4 clicks from off to full.
+- **Push a knob in and let go:** that handle goes straight to off.
+- **Push a knob in and turn it:** look around. The lower knob looks left and right, the upper
+  knob looks up and down. Press **Look straight ahead** to look forward again.
+- **Horn: low and Horn: high together:** the two-tone horn.
+- **SHIFT + Look straight ahead:** show or hide the speed display.
+
+Want a button to do something else? It is all in `MINI_KEYBOARD` in
+[`src/config.js`](src/config.js) (the F310's buttons are there too, in `F310`).
+
 ## How to drive a train
 
 You start standing at the end of the platform at Aldbury. Northwick, the last station, is 14 miles away.
@@ -107,6 +132,8 @@ More things to try in the same file:
 - `CAB_SWAY_M`: set to `0` for a perfectly smooth cab, or `0.02` for a very bumpy one
 - `CANT_PER_CURVATURE`: how much the train leans into bends (`0` = not at all)
 - `STOP_PERFECT_M`: how close counts as a "Perfect" stop (try making it stricter!)
+- `MINI_KEYBOARD`: which button does which job. Try swapping the horn and the headlights!
+- `KNOB_STEP`: how far one knob click moves a handle
 
 If you break something, change it back and save again.
 
@@ -116,7 +143,7 @@ If you break something, change it back and save again.
 |------|---------------|
 | [`src/config.js`](src/config.js) | All the numbers and colours you can tweak |
 | [`src/main.js`](src/main.js) | Starts the game, runs the loop, connects the start, drive, pause and finished screens |
-| [`src/controls.js`](src/controls.js) | Reads the gamepad, keyboard and mouse |
+| [`src/controls.js`](src/controls.js) | Reads the gamepad, the MINI_KEYBOARD, the keyboard and the mouse |
 | [`src/physics.js`](src/physics.js) | How the train speeds up, coasts, climbs and brakes (just numbers, no pictures) |
 | [`src/units.js`](src/units.js) | Changes metres and metres per second into miles, yards and mph |
 | [`src/route.js`](src/route.js) | The railway line, written as a list. Add hills, bends, bridges, scenery and speed limits here |
@@ -206,6 +233,8 @@ This sends your changes to GitHub, and the game on the internet updates a minute
 - **The game is jerky**: press `F1` to see the frame rate. The game makes the picture
   blurrier by itself to keep going, and the numbers show how sharp it is. In
   `src/config.js` you can also set `QUALITY` to `"low"` or `HEADLIGHT_BEAMS` to `false`.
+- **The buttons do nothing, or the wrong thing**: is the right controller chosen? The start
+  screen says which. Press Tab there to swap.
 - **The gamepad does nothing**: press a button on it first. Browsers hide gamepads
   until you do. Check the switch on the back is on **X**.
 - **There is no sound**: browsers keep quiet until a key is pressed. The game says
@@ -273,6 +302,16 @@ This sends your changes to GitHub, and the game on the internet updates a minute
   looking down the line); the horn works on D-pad left/right as well as the A button; the
   stop-marker thresholds and points (`STOP_PERFECT_M` and friends in `config.js`) are a
   first guess at values that feel fair, not from any official source.
+- **The MINI_KEYBOARD** is a CH57x-type macro pad (USB `1189:8840`, sold with Windows software
+  as `MINI_KEYBOARD.exe`). It needs no driver: it shows up as an ordinary USB keyboard. As it came,
+  the buttons send the letters a to l (rows a–d, e–h, i–l with the knobs on the right) and each knob
+  sends one key per click (upper knob: 3 clockwise, 1 anticlockwise, 2 pressed; lower knob: 6, 4, 5).
+  It was **not** reprogrammed; if it ever is, change the key names in `MINI_KEYBOARD` in `config.js`
+  to match. Buttons report being held (a held button stays down), so SHIFT and push-and-turn work.
+  While the MINI_KEYBOARD is chosen, the ordinary keyboard ignores the keys it sends (so the
+  keyboard's A no longer means "more brake"), and the F310 is ignored completely. A knob push counts
+  as "handle off" only if the knob wasn't turned while it was pushed in. The choice of controller is
+  kept in the browser (`localStorage`), separately for the Pages address and the `./run` address.
 - The gamepad is read directly with the browser Gamepad API, every frame, in
   [`src/controls.js`](src/controls.js): "standard" mapping, 0.15 stick deadzone, analogue
   triggers (falling back to a full pull if a browser only reports pressed).

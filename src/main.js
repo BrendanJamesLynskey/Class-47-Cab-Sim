@@ -108,6 +108,18 @@ function startRun() {
 
 // ---- What each screen says ----
 function startScreen() {
+  if (controls.controller === "MINI_KEYBOARD") {
+    return {
+      title: C.GAME_TITLE,
+      lines: [
+        `Railtour, locomotive ${C.LOCO_NUMBER}`,
+        "Lower knob: power  ·  Upper knob: brake  ·  Press a knob in and turn it to look around",
+        "Controller: MINI_KEYBOARD  (press Tab on the keyboard for the F310)",
+      ],
+      padMessage: "", padClass: "",
+      prompt: "Press the top-left button to start",
+    };
+  }
   const pad = {
     none: { padMessage: "No gamepad found. Press any button on it. (Or use the keyboard.)", padClass: "bad" },
     "wrong-mode": { padMessage: "Gamepad found, but it's in the wrong mode. Flip the switch on the back to X.", padClass: "bad" },
@@ -119,6 +131,7 @@ function startScreen() {
       `Railtour, locomotive ${C.LOCO_NUMBER}`,
       "RT more power  ·  RB less power  ·  LT more brake  ·  LB less brake",
       "D-pad up/down: reverser  ·  D-pad left/right or A: horn  ·  Back: emergency brake",
+      "Controller: F310  (press Tab on the keyboard for the MINI_KEYBOARD)",
     ],
     ...pad,
     prompt: controls.padStatus === "ready" ? "Press A to start" : "Press A (or Enter) to start",
@@ -146,7 +159,13 @@ function driveFrame(seconds) {
   if (controls.tailLightsPressed) tailLights = !tailLights;
 
   // Buttons that go down for one moment are used straight away (a fast display might skip the physics step).
-  updateHandles(train, { throttleUp: 0, throttleDown: 0, brakeUp: 0, brakeDown: 0, emergencyPressed: controls.emergencyPressed, reverserStep: controls.reverserStep }, 0);
+  // So are knob clicks on the MINI_KEYBOARD: each one jumps a handle by a fixed step.
+  updateHandles(train, {
+    throttleUp: 0, throttleDown: 0, brakeUp: 0, brakeDown: 0,
+    emergencyPressed: controls.emergencyPressed, reverserStep: controls.reverserStep,
+    throttleNudge: controls.throttleNudge, brakeNudge: controls.brakeNudge,
+    throttleOff: controls.throttleOff, brakeOff: controls.brakeOff,
+  }, 0);
 
   // Held buttons move the levers in small fixed steps, so the game feels the same at any frame rate.
   const held = {
@@ -268,6 +287,8 @@ function frame(now) {
 
   controls.update();
   if (controls.toggleHudPressed) hud.toggle();
+  // Tab swaps controllers, but not in the middle of driving.
+  if (controls.switchPressed && screen !== "drive") controls.switchController();
 
   // Which screen are we on, and does a button change it?
   let justChanged = false;

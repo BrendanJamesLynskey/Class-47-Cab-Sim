@@ -84,6 +84,8 @@ const clamp01 = (x) => Math.min(1, Math.max(0, x));
 //   throttleDown, brakeDown,      0 or 1: bumpers
 //   emergencyPressed,             true for the moment the button goes down
 //   reverserStep,                 +1 (forward), -1 (reverse) or 0, for one moment
+//   throttleNudge, brakeNudge,    (optional) jump a handle this much at once: a knob click
+//   throttleOff, brakeOff,        (optional) true = put that handle straight to off
 // }
 export function updateHandles(train, input, dt) {
   const p = train.params;
@@ -95,6 +97,11 @@ export function updateHandles(train, input, dt) {
     train.brakeHandle = 1;
     return;
   }
+
+  if (input.throttleOff) train.throttle = 0;
+  if (input.brakeOff) train.brakeHandle = 0;
+  if (input.throttleNudge) train.throttle = clamp01(train.throttle + input.throttleNudge);
+  if (input.brakeNudge) train.brakeHandle = clamp01(train.brakeHandle + input.brakeNudge);
 
   train.throttle = clamp01(
     train.throttle + (input.throttleUp * p.throttleRaiseRate - input.throttleDown * p.throttleLowerRate) * dt
