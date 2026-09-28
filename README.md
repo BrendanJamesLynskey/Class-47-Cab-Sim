@@ -86,36 +86,6 @@ before each footpath crossing: sound the horn as you pass it, so walkers know a 
 coming. The village has a proper **road crossing** instead, with gates and lights — you
 might see a car or two waiting for you to pass.
 
-## The horn light
-
-A Raspberry Pi Pico, plugged into the Pi with its own USB cable, lights its little green
-light whenever you sound the horn (D-pad left or right, A, or H and J on the keyboard).
-
-**The first time only**, the browser has to be told which USB device is the Pico:
-
-1. Open the game with `?pico` on the end of the address, like
-   `https://brendanjameslynskey.github.io/Class-47-Cab-Sim/?pico`.
-2. Press any key. A list of devices pops up. Choose the Pico (**Board in FS mode**) and press **Connect**.
-
-After that the browser remembers it: the game finds the Pico by itself every time, even
-without `?pico`, and even if you unplug it and plug it back in. No Pico? The game plays
-exactly the same. How to set up a new Pico is in [`pico/README.md`](pico/README.md).
-
-**With `./run` too.** The browser only lets web pages talk to USB devices on "safe" addresses,
-and the `http://192.168.1.132:5173` address from `./run` isn't one. Chromium on the Pi has to be
-told once that it is safe:
-
-1. In Chromium on the Pi, go to `chrome://flags/#unsafely-treat-insecure-origin-as-secure`
-2. In the box, type `http://192.168.1.132:5173` (exactly the **Network** address `./run` prints),
-   and set the setting next to it to **Enabled**.
-3. Press **Relaunch** at the bottom.
-4. Open `http://192.168.1.132:5173/?pico`, press any key and choose the Pico, just like above.
-   (The browser remembers the Pico separately for each address, so this is needed once here too.)
-
-If Chromium shows only a blank white page after the relaunch, look for a hidden window asking
-for a password to unlock the "keyring" (where the Pi keeps saved passwords). Chromium waits for
-it before doing anything else. Type the password and it carries on.
-
 ## Your first change: a shorter train
 
 1. Open [`src/config.js`](src/config.js).
@@ -152,7 +122,6 @@ If you break something, change it back and save again.
 | [`src/route.js`](src/route.js) | The railway line, written as a list. Add hills, bends, bridges, scenery and speed limits here |
 | [`src/path.js`](src/path.js) | Turns the route into the real shape of the track: bends ease in, the track leans, slopes are smooth |
 | [`src/audio.js`](src/audio.js) | Makes the horn sound (with Web Audio, no sound files) |
-| [`src/pico.js`](src/pico.js) | Tells the Pico to switch its light on and off with the horn |
 | [`src/scoring.js`](src/scoring.js) | Marks how close you stopped to each station's marker |
 | [`src/cab.js`](src/cab.js) | Puts the cab together and moves the needles and handles |
 | [`src/cab-layout.js`](src/cab-layout.js) | Where everything is in the cab, in metres (including the 4 x 2 switch panel) |
@@ -179,9 +148,6 @@ If you break something, change it back and save again.
 | [`src/world/sky.js`](src/world/sky.js) | The sky, sun, stars, clouds, far-away hills and the light |
 | [`src/world/mesh-builder.js`](src/world/mesh-builder.js) | Glues thousands of little shapes into one to keep the game fast |
 | [`src/world/random.js`](src/world/random.js) | "Random" numbers that give the same countryside every time |
-| [`pico/main.py`](pico/main.py) | The program on the Pico itself: `H` turns the light on, `h` turns it off |
-| [`pico/test.html`](pico/test.html) | A page with "Light on" and "Light off" buttons, to test the Pico without the game |
-| [`pico/README.md`](pico/README.md) | How to set up a new Pico |
 | [`tools/check-physics.js`](tools/check-physics.js) | Checks the train behaves like a real one |
 | [`tools/check-route.js`](tools/check-route.js) | Checks the route makes sense |
 | [`tools/check-scoring.js`](tools/check-scoring.js) | Checks the stop-marker scoring works |
@@ -244,9 +210,6 @@ This sends your changes to GitHub, and the game on the internet updates a minute
   until you do. Check the switch on the back is on **X**.
 - **There is no sound**: browsers keep quiet until a key is pressed. The game says
   "Sound off: press any key". Press one!
-- **The horn light doesn't come on**: is the Pico plugged into the Pi? Has it been chosen once
-  (see "The horn light" above)? Is Thonny or another tab using it? Only one program can talk
-  to it at a time. Then reload the page.
 - **`./run` says "Port 5173 is already in use"**: another game (like the Platformer) is running.
   Press `Ctrl+C` in its terminal first.
 
@@ -318,28 +281,3 @@ This sends your changes to GitHub, and the game on the internet updates a minute
   the power controller box just right of the driver, a small horn valve lever at the far left,
   cream walls with blue panels, a roller blind over each half of the windscreen, a droplight
   window and a door on each side. It is stylised, not a museum replica.
-- **Horn light** (brief: [`docs/directions_pico_horn_led.md`](docs/directions_pico_horn_led.md)):
-  the browser talks straight to a Pico running MicroPython ([`pico/main.py`](pico/main.py)) over
-  **Web Serial**, with no program on the Pi in between. It sends one byte whenever the horn changes:
-  `H` on, `h` off (the same horn state the sound uses, so every horn button works, and the light
-  goes off when paused). `PICO_LED_ENABLED = false` in `config.js` switches it off completely.
-  - Web Serial needs Chrome or Chromium on a "secure" address: `https://` (GitHub Pages) or
-    `http://localhost` work, but the dev server's `http://192.168.1.132:5173` does not. The fix is
-    Chromium's "Insecure origins treated as secure" setting, set once in `chrome://flags` (steps in
-    "The horn light" above). It is saved in the normal profile, so the Pi's launch command doesn't
-    change. (The command-line equivalent is
-    `--unsafely-treat-insecure-origin-as-secure=http://192.168.1.132:5173`.) The setting and the Pico
-    permission are both tied to the exact address: if this box's address ever changes, update the
-    setting and pair again with `?pico`. A DHCP reservation for this box on the router avoids that.
-  - Choices made where the brief was silent: the one-time device list only appears when the
-    address has **`?pico`** (otherwise everyone on the Pages link, with no Pico, would get a device
-    list on their first key press); the list only shows MicroPython Picos (USB `2e8a:0005`), so the
-    Debug Probe can't be picked by mistake; a known Pico that is busy when the game loads is tried
-    again 5 times, 2 s apart; 115200 baud (it makes no difference over USB).
-  - If the browser closes while the horn is held, the light stays on until the next `h` (or the
-    Pico is unplugged): the Pico only does what it is told.
-  - Tested with MicroPython v1.29.0 on a plain Pico (RP2040), and confirmed on the real Raspberry Pi 5
-    with the F310 against the Pages address: the one-time `?pico` device list, the light following
-    D-pad left, D-pad right and A, and reconnecting by itself after a reload without `?pico`.
-    Also confirmed on the Pi with the dev server (`./run`) after the `chrome://flags` setting above. `tools/check-browser.cjs` checks the
-    game with no Web Serial at all, and with a pretend Pico that records what it is sent.
